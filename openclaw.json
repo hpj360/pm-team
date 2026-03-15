@@ -1,0 +1,315 @@
+{
+  "project": {
+    "name": "pm-team",
+    "version": "2.2.0",
+    "description": "产品全生命周期多角色协作团队"
+  },
+  "logs": {
+    "path": "./logs",
+    "tasks": "./logs/tasks",
+    "workflow": "./logs/workflow",
+    "approvals": "./logs/approvals",
+    "reports": "./logs/reports"
+  },
+  "agents": {
+    "list": [
+      {
+        "id": "director",
+        "name": "项目总监",
+        "workspace": "./workspaces/director",
+        "configPath": "./agents/director/AGENT.md",
+        "description": "负责整个产品生命周期的任务调度和协调，是团队的中央大脑"
+      },
+      {
+        "id": "requirement-analyst",
+        "name": "需求分析师",
+        "workspace": "./workspaces/requirement-analyst",
+        "configPath": "./agents/requirement-analyst/AGENT.md",
+        "description": "负责需求调研、分析和文档编写，输出PRD文档"
+      },
+      {
+        "id": "architect",
+        "name": "技术架构师",
+        "workspace": "./workspaces/architect",
+        "configPath": "./agents/architect/AGENT.md",
+        "description": "负责系统架构设计和技术选型，输出技术架构方案"
+      },
+      {
+        "id": "product-designer",
+        "name": "产品设计师",
+        "workspace": "./workspaces/product-designer",
+        "configPath": "./agents/product-designer/AGENT.md",
+        "description": "负责产品设计、原型设计和交互设计，输出原型图和交互文档"
+      },
+      {
+        "id": "ui-designer",
+        "name": "UI设计师",
+        "workspace": "./workspaces/ui-designer",
+        "configPath": "./agents/ui-designer/AGENT.md",
+        "description": "负责视觉设计、设计规范和切图标注，输出高保真设计稿"
+      },
+      {
+        "id": "database-designer",
+        "name": "数据库设计师",
+        "workspace": "./workspaces/database-designer",
+        "configPath": "./agents/database-designer/AGENT.md",
+        "description": "负责数据库架构设计和数据模型设计，输出数据库设计方案"
+      },
+      {
+        "id": "backend-developer",
+        "name": "后端工程师",
+        "workspace": "./workspaces/backend-developer",
+        "configPath": "./agents/backend-developer/AGENT.md",
+        "description": "负责后端服务开发和API设计，输出后端代码和API"
+      },
+      {
+        "id": "frontend-developer",
+        "name": "前端工程师",
+        "workspace": "./workspaces/frontend-developer",
+        "configPath": "./agents/frontend-developer/AGENT.md",
+        "description": "负责前端页面开发和性能优化，输出前端代码"
+      },
+      {
+        "id": "security-engineer",
+        "name": "安全工程师",
+        "workspace": "./workspaces/security-engineer",
+        "configPath": "./agents/security-engineer/AGENT.md",
+        "description": "负责安全设计和安全审计，输出安全方案和审计报告"
+      },
+      {
+        "id": "code-reviewer",
+        "name": "代码审查员",
+        "workspace": "./workspaces/code-reviewer",
+        "configPath": "./agents/code-reviewer/AGENT.md",
+        "description": "负责代码质量审查、安全检查和最佳实践建议"
+      },
+      {
+        "id": "tester",
+        "name": "测试工程师",
+        "workspace": "./workspaces/tester",
+        "configPath": "./agents/tester/AGENT.md",
+        "description": "负责测试用例设计、自动化测试和质量验证"
+      },
+      {
+        "id": "operations",
+        "name": "运维工程师",
+        "workspace": "./workspaces/operations",
+        "configPath": "./agents/operations/AGENT.md",
+        "description": "负责部署、监控和线上环境维护"
+      },
+      {
+        "id": "tech-writer",
+        "name": "技术文档工程师",
+        "workspace": "./workspaces/tech-writer",
+        "configPath": "./agents/tech-writer/AGENT.md",
+        "description": "负责技术文档和API文档编写，输出高质量文档"
+      }
+    ]
+  },
+  "skills": {
+    "paths": [
+      "./skills"
+    ]
+  },
+  "bindings": [
+    {
+      "agentId": "director",
+      "match": {
+        "channel": "default",
+        "purpose": "product-lifecycle"
+      }
+    }
+  ],
+  "workflow": {
+    "name": "产品全生命周期协作流程",
+    "description": "从需求分析到上线运维的完整产品开发流程",
+    "stages": [
+      {
+        "name": "需求分析",
+        "agent": "requirement-analyst",
+        "output": "PRD文档",
+        "description": "深入理解用户需求，输出产品需求文档"
+      },
+      {
+        "name": "用户故事设计",
+        "agent": "requirement-analyst",
+        "output": "用户故事列表",
+        "description": "将需求转化为标准格式的用户故事，符合INVEST原则"
+      },
+      {
+        "name": "验收标准定义",
+        "agent": "requirement-analyst",
+        "output": "验收标准文档",
+        "description": "为每个用户故事定义清晰的验收标准(Gherkin格式)"
+      },
+      {
+        "name": "需求评审",
+        "agent": "director",
+        "output": "需求评审报告",
+        "description": "评审PRD文档、用户故事和验收标准，确认完整性和可行性",
+        "requireApproval": true
+      },
+      {
+        "name": "架构设计",
+        "agent": "architect",
+        "output": "技术架构方案",
+        "description": "设计系统架构和技术选型",
+        "requireApproval": true
+      },
+      {
+        "name": "数据库设计",
+        "agent": "database-designer",
+        "output": "数据库设计方案",
+        "description": "设计数据模型和数据库架构"
+      },
+      {
+        "name": "产品设计",
+        "agent": "product-designer",
+        "output": "原型图/交互文档",
+        "description": "设计产品原型和交互流程",
+        "parallel": true
+      },
+      {
+        "name": "UI设计",
+        "agent": "ui-designer",
+        "output": "设计稿/切图",
+        "description": "设计高保真视觉稿和设计资源",
+        "dependsOn": "产品设计"
+      },
+      {
+        "name": "设计评审",
+        "agent": "director",
+        "output": "设计评审报告",
+        "description": "评审设计方案，确认满足需求",
+        "requireApproval": true
+      },
+      {
+        "name": "后端开发",
+        "agent": "backend-developer",
+        "output": "API/后端代码",
+        "description": "开发后端服务和API接口",
+        "parallel": true
+      },
+      {
+        "name": "前端开发",
+        "agent": "frontend-developer",
+        "output": "前端代码",
+        "description": "开发前端页面(使用Mock数据)",
+        "parallel": true
+      },
+      {
+        "name": "前后端联调",
+        "agent": "backend-developer",
+        "output": "联调报告",
+        "description": "前后端接口联调验证",
+        "collaborators": ["frontend-developer"]
+      },
+      {
+        "name": "代码审查",
+        "agent": "code-reviewer",
+        "output": "审查报告",
+        "description": "审查代码质量和最佳实践"
+      },
+      {
+        "name": "安全审计",
+        "agent": "security-engineer",
+        "output": "安全审计报告",
+        "description": "进行安全审计和漏洞扫描",
+        "requireApproval": true
+      },
+      {
+        "name": "测试验证",
+        "agent": "tester",
+        "output": "测试报告",
+        "description": "执行功能测试和性能测试"
+      },
+      {
+        "name": "测试评审",
+        "agent": "director",
+        "output": "测试评审报告",
+        "description": "评审测试结果，确认是否可上线",
+        "requireApproval": true
+      },
+      {
+        "name": "预发布部署",
+        "agent": "operations",
+        "output": "预发布环境",
+        "description": "部署到预发布环境"
+      },
+      {
+        "name": "预发布验证",
+        "agent": "tester",
+        "output": "预发布验证报告",
+        "description": "在预发布环境进行验证",
+        "collaborators": ["operations"]
+      },
+      {
+        "name": "正式部署",
+        "agent": "operations",
+        "output": "部署结果",
+        "description": "部署到生产环境并监控"
+      },
+      {
+        "name": "上线验收",
+        "agent": "director",
+        "output": "验收报告",
+        "description": "验收上线结果",
+        "requireApproval": true
+      },
+      {
+        "name": "文档编写",
+        "agent": "tech-writer",
+        "output": "技术文档",
+        "description": "编写完整的技术文档和API文档"
+      }
+    ]
+  },
+  "errorHandling": {
+    "retryPolicy": {
+      "maxRetries": 3,
+      "backoff": "exponential",
+      "initialDelayMs": 1000,
+      "maxDelayMs": 30000
+    },
+    "fallbackAgent": "director",
+    "errorNotifications": true
+  },
+  "checkpoints": [
+    {
+      "stage": "需求评审",
+      "requireApproval": true,
+      "approvers": ["director", "requirement-analyst"]
+    },
+    {
+      "stage": "架构设计",
+      "requireApproval": true,
+      "approvers": ["director", "architect"]
+    },
+    {
+      "stage": "设计评审",
+      "requireApproval": true,
+      "approvers": ["director", "product-designer", "ui-designer"]
+    },
+    {
+      "stage": "安全审计",
+      "requireApproval": true,
+      "approvers": ["director", "security-engineer"]
+    },
+    {
+      "stage": "测试评审",
+      "requireApproval": true,
+      "approvers": ["director", "tester"]
+    },
+    {
+      "stage": "上线验收",
+      "requireApproval": true,
+      "approvers": ["director"]
+    }
+  ],
+  "notifications": {
+    "onStageComplete": true,
+    "onError": true,
+    "onApprovalRequired": true,
+    "channels": ["default"]
+  }
+}

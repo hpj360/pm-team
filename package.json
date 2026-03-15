@@ -1,0 +1,21 @@
+{
+  "name": "pm-team",
+  "version": "1.0.0",
+  "description": "产品全生命周期多角色协作团队 - 基于 OpenClaw 的多 Agent 协作系统",
+  "main": "index.js",
+  "scripts": {
+    "start": "openclaw start",
+    "dev": "openclaw dev",
+    "validate": "openclaw validate"
+  },
+  "keywords": [
+    "openclaw",
+    "multi-agent",
+    "product-management",
+    "collaboration"
+  ],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {}
+}

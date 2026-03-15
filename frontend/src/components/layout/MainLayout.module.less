@@ -1,0 +1,95 @@
+/**
+ * 主布局样式
+ */
+
+.layout {
+  min-height: 100vh;
+}
+
+.sider {
+  box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+
+.logo {
+  height: 64px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.1);
+  margin: 0;
+  overflow: hidden;
+}
+
+.logoIcon {
+  font-size: 28px;
+  color: #1890ff;
+}
+
+.logoText {
+  color: #fff;
+  font-size: 16px;
+  font-weight: 600;
+  margin-left: 10px;
+  white-space: nowrap;
+}
+
+.header {
+  padding: 0 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  box-shadow: 0 1px 4px rgba(0, 21, 41, 0.08);
+  z-index: 9;
+}
+
+.headerLeft {
+  display: flex;
+  align-items: center;
+}
+
+.trigger {
+  font-size: 18px;
+  padding: 0 12px;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.trigger:hover {
+  color: #1890ff;
+}
+
+.headerRight {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.userInfo {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  padding: 0 12px;
+  height: 48px;
+  transition: background-color 0.3s;
+}
+
+.userInfo:hover {
+  background-color: rgba(0, 0, 0, 0.025);
+}
+
+.avatar {
+  margin-right: 8px;
+}
+
+.username {
+  font-size: 14px;
+  color: rgba(0, 0, 0, 0.85);
+}
+
+.content {
+  margin: 16px;
+  padding: 24px;
+  min-height: calc(100vh - 64px - 32px);
+  overflow: auto;
+}
