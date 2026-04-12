@@ -40,3 +40,4 @@ target/
 # Sensitive files - DO NOT COMMIT
 **/application-prod.yml
 **/application-secret.yml
+**/application-local.yml
