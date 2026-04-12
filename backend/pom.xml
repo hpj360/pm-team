@@ -21,6 +21,7 @@
         <module>analyze-service</module>
         <module>profile-service</module>
         <module>auth-service</module>
+        <module>feishu-service</module>
     </modules>
 
     <!-- 版本管理 -->

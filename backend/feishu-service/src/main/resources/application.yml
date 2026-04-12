@@ -1,0 +1,28 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: feishu-service
+  profiles:
+    active: dev
+  cloud:
+    nacos:
+      discovery:
+        server-addr: ${NACOS_SERVER:localhost:8848}
+        namespace: ${NACOS_NAMESPACE:dev}
+
+feishu:
+  app-id: ${FEISHU_APP_ID:your-app-id}
+  app-secret: ${FEISHU_APP_SECRET:your-app-secret}
+  encrypt-key: ${FEISHU_ENCRYPT_KEY:}
+  verification-token: ${FEISHU_VERIFICATION_TOKEN:}
+  
+agent:
+  service-url: ${AGENT_SERVICE_URL:http://localhost:8080}
+  default-agent: director
+
+logging:
+  level:
+    com.redteam: DEBUG
+    com.larksuite: DEBUG
