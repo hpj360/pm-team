@@ -1,8 +1,8 @@
-# Skill: Database Designer
+# Skill: Database Design Toolkit
 
 ## 描述
 
-数据库设计工具，帮助数据库设计师进行数据模型设计和数据库优化。
+数据库设计工具包，帮助数据库设计师进行数据模型设计、DDL 生成、索引优化与数据迁移。作为 `database-designer` Agent 的专用 Skill，与同名 Agent 解耦命名以避免路径与引用歧义。
 
 ## 功能
 
