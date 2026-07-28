@@ -6,6 +6,27 @@
 
 > **合并说明**: 本 Skill 已合并原 `test-runner` Skill 的全部功能（单元测试执行、集成测试执行、性能测试执行、测试报告生成）。`test-runner` 已废弃，所有调用方应迁移至本 Skill。本 Skill 兼容 test-runner 的全部 API（action: "run", type: "unit|integration|performance"）和配置字段。
 
+## 技术栈映射（必读）
+
+本项目的测试技术栈已在 `frontend/package.json` 和 `backend/pom.xml` 中配置，并在 `.gitlab-ci.yml` 的 `test` 阶段执行。本 Skill 与现有技术栈的映射关系：
+
+| Skill 声明能力 | 实际技术栈 | 配置位置 | 状态 |
+|---------------|----------|---------|------|
+| 单元测试（前端） | **Vitest 1.x** + @testing-library/react + jsdom | `frontend/package.json` | ✅ 已配置 |
+| 单元测试（后端） | **JUnit 5**（Maven Surefire） | `backend/pom.xml` | ✅ 已配置 |
+| 覆盖率（前端） | **@vitest/coverage-v8** | `frontend/package.json` | ✅ 已配置 |
+| 覆盖率（后端） | **JaCoCo**（门禁≥80%） | `.gitlab-ci.yml` `JACOCO_MIN_COVERAGE` | ✅ 已配置 |
+| 集成测试（后端） | **Spring Boot Test** + TestContainers | `backend/pom.xml`（需确认依赖） | 🟡 框架就绪 |
+| E2E 测试 | **Vitest E2E 配置**（`vitest.e2e.config.ts`） | `frontend/package.json` `test:e2e` | 🟡 配置就绪，用例待补充 |
+| API 接口测试 | 未配置（可引入 Postman/Newman 或 REST Assured） | - | ⚠️ 规划中 |
+| 性能测试 | 未配置（可引入 k6 或 JMeter） | - | ⚠️ 规划中 |
+
+**调用约定**：
+- 前端测试：`npm run test`（Vitest），CI 中由 `test:frontend` job 执行
+- 后端测试：`mvn test`（JUnit + JaCoCo），CI 中由 `test:backend` job 执行
+- 覆盖率门禁：后端 JaCoCo ≥80%，由 `.gitlab-ci.yml` 强制检查
+- API 测试与性能测试需引入对应工具后启用，当前调用本 Skill 的 `type: "api"` / `type: "performance"` 会返回"工具未配置"提示
+
 ## 功能
 
 ### 1. 单元测试自动执行

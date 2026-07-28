@@ -6,6 +6,23 @@
 
 > **职责边界说明**: 原 `deployer` 的"部署执行"和"部署策略"功能已委托给 `cicd-pipeline` Skill（其 `环境部署` 和 `回滚机制` 能力覆盖本 Skill 的部署执行与回滚操作）。本 Skill 现专注于**健康检查**这一独有能力，作为部署流水线的验证环节。
 
+## 与现有 .gitlab-ci.yml 的关系（必读）
+
+本项目的部署流水线已由 `.gitlab-ci.yml` 的 `deploy` 和 `verify` 阶段完整实现。**本 Skill 是部署验证的编排文档层与策略定义层，而非执行层。**
+
+| Skill 角色 | 实际执行方（.gitlab-ci.yml） | 职责划分 |
+|-----------|-------------------------------|---------|
+| 健康检查策略（URL/重试/超时） | `verify:health-check` job（curl 轮询 `/healthz`，5分钟超时） | Skill 定义检查策略，.gitlab-ci.yml 已实现 |
+| 回滚决策（proceed/rollback/observe） | `verify:rollback` job（kubectl rollout undo） | Skill 提供决策建议，.gitlab-ci.yml 执行回滚 |
+| K8s 滚动部署 | `deploy:staging` / `deploy:production`（kubectl set image + rollout status） | 部署执行已委托给 cicd-pipeline → .gitlab-ci.yml |
+| 金丝雀发布 | `deploy:production` 的金丝雀策略（10%流量） | 策略由 Skill 定义，执行由 .gitlab-ci.yml 完成 |
+
+**调用约定**：
+- 当需要了解"部署后如何验证"时，查询本 Skill 的健康检查策略与决策模型
+- 当需要实际执行健康检查时，由 `.gitlab-ci.yml` 的 `verify:health-check` job 完成
+- 当健康检查失败需要回滚时，由 `.gitlab-ci.yml` 的 `verify:rollback` job 自动触发 kubectl undo
+- 本 Skill 的 `action: "healthCheck"` API 仅作为编排接口保留，实际执行由 .gitlab-ci.yml 完成
+
 ## 功能
 
 ### 1. 健康检查（核心能力）

@@ -4,6 +4,22 @@
 
 监控告警工具，帮助运维工程师建立监控体系和告警机制。
 
+> **实施状态：规划中（PLANNED）**：本项目当前未配置 Prometheus/Grafana/AlertManager 等监控基础设施。本 Skill 定义了监控策略与告警规则模板，待监控基础设施落地后启用。当前仅 `.gitlab-ci.yml` 的 `verify:health-check` 提供部署后的基础健康检查（HTTP 状态码轮询），不包含运行时指标监控、性能告警与大盘可视化能力。
+
+## 实施路线图
+
+| 阶段 | 内容 | 依赖 | 状态 |
+|------|------|------|------|
+| Phase 1 | 部署 Prometheus + Node Exporter | K8s 集群 | ⚠️ 待启动 |
+| Phase 2 | 部署 Grafana + 导入仪表盘模板 | Phase 1 | ⚠️ 待启动 |
+| Phase 3 | 配置 AlertManager + 告警规则（本 Skill 的模板） | Phase 1 | ⚠️ 待启动 |
+| Phase 4 | 集成 Spring Boot Actuator + Micrometer | backend 微服务 | ⚠️ 待启动 |
+| Phase 5 | 配置飞书告警通知渠道 | Phase 3 + 飞书 Bot | ⚠️ 待启动 |
+
+**调用约定**：
+- 当前调用本 Skill 的 API 会返回"监控基础设施未就绪"提示
+- 建议优先完成 Phase 1-2，使本 Skill 的 `action: "addMetric"` / `action: "addAlert"` API 可实际生效
+
 ## 功能
 
 ### 1. 监控配置

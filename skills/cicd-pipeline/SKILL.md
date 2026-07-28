@@ -2,7 +2,40 @@
 
 ## 描述
 
-CI/CD 流水线工具，支持从代码提交到部署的端到端自动化流程，覆盖构建、测试、打包、发布与回滚等全生命周期管理。
+CI/CD 流水线编排与文档层工具，支持从代码提交到部署的端到端自动化流程，覆盖构建、测试、打包、发布与回滚等全生命周期管理。
+
+## 与现有 .gitlab-ci.yml 的关系（必读）
+
+本项目已配置完整的 GitLab CI/CD 流水线（见 `.gitlab-ci.yml`），包含 8 个阶段：`checkout → lint → build → test → security → package → deploy → verify`。**本 Skill 是 CI/CD 的编排文档层与策略定义层，而非执行层。**
+
+| Skill 角色 | 实际执行方 | 职责划分 |
+|-----------|----------|---------|
+| 编排策略定义（本 Skill） | `.gitlab-ci.yml` | 本 Skill 定义"应该做什么"，.gitlab-ci.yml 定义"实际怎么做" |
+| 阶段顺序与依赖 | `.gitlab-ci.yml` 的 `stages` 与 `needs` | Skill 的 8 阶段模型与 .gitlab-ci.yml 完全对齐 |
+| 工具选择（Maven/npm/Docker） | `.gitlab-ci.yml` 的 `image` 与 `script` | Skill 声明支持的工具，.gitlab-ci.yml 已选用 Maven + npm + Docker |
+| 触发规则 | `.gitlab-ci.yml` 的 `workflow.rules` | Skill 定义触发策略，.gitlab-ci.yml 已配置 main/develop/feature/release 分支触发 |
+| 覆盖率门禁 | JaCoCo（`JACOCO_MIN_COVERAGE: "0.80"`） | Skill 定义阈值，.gitlab-ci.yml 已实现 80% 门禁检查 |
+| 质量门禁 | SonarQube Quality Gate | Skill 定义质量要求，.gitlab-ci.yml 已配置 `sonar.qualitygate.wait=true` |
+
+**调用约定**：
+- 当 Director 或 Operations Agent 需要了解"CI/CD 应该做什么"时，查询本 Skill 的文档与配置
+- 当需要实际触发流水线时，由 Git push/MR 触发 `.gitlab-ci.yml`，而非调用本 Skill 的 `action: "trigger"` API
+- 本 Skill 的 `action: "trigger"` / `action: "status"` / `action: "rollback"` API 仅作为编排接口保留，实际执行由 .gitlab-ci.yml 完成
+
+## 阶段映射表
+
+本 Skill 的 8 阶段与 `.gitlab-ci.yml` 的 job 一一对应：
+
+| Skill 阶段 | .gitlab-ci.yml Job | 执行工具 | 门禁 |
+|-----------|-------------------|---------|------|
+| 1. Checkout | `checkout:verify` | alpine:3.18 | - |
+| 2. Lint | `lint:backend` / `lint:frontend` | Maven checkstyle+spotbugs / ESLint+Prettier | fail-fast |
+| 3. Build | `build:backend` / `build:frontend` | Maven compile / Vite build | - |
+| 4. Test | `test:backend` / `test:frontend` / `sonarqube:check` | Maven test+JaCoCo / Vitest / SonarQube | 覆盖率≥80% |
+| 5. Security | `security:dependency-scan` / `security:sast` / `security:secret-detect` | Trivy / Semgrep / Gitleaks | HIGH+CRITICAL fail |
+| 6. Package | `package:backend:*` / `package:frontend` / `security:image-scan` | Docker build+push / Trivy image scan | 镜像扫描通过 |
+| 7. Deploy | `deploy:staging` / `deploy:production` | kubectl rollout (K8s) | 手动审批(生产) |
+| 8. Verify | `verify:health-check` / `verify:rollback` | curl 健康检查 / kubectl undo | 5分钟健康检查 |
 
 ## 功能
 

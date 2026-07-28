@@ -2,9 +2,30 @@
 
 ## 描述
 
-安全扫描工具，帮助安全工程师进行漏洞扫描和安全审计。
+安全扫描策略编排层工具，帮助安全工程师定义安全扫描策略、编排扫描工具链并汇总安全审计结果。
 
-> **职责边界说明**: 本 Skill 是安全扫描的**唯一负责方**，承担原 `code-analyzer` 委托的"安全漏洞扫描"能力。`code-analyzer` 专注于代码质量与性能分析，本 Skill 专注于安全漏洞与合规检查。两者形成"质量→安全"的清晰分工。本 Skill 提供更全面的安全能力：SAST（代码安全扫描）、DAST（Web 应用扫描）、SCA（依赖漏洞扫描）、容器镜像扫描、渗透测试、合规检查。
+> **职责边界说明**: 本 Skill 是安全扫描的**唯一负责方**，承担原 `code-analyzer` 委托的"安全漏洞扫描"能力。`code-analyzer` 专注于代码质量与性能分析，本 Skill 专注于安全漏洞与合规检查。两者形成"质量→安全"的清晰分工。
+
+## 与现有安全工具链的关系（必读）
+
+本项目已在 `.gitlab-ci.yml` 的 `security` 阶段配置了完整的三层安全扫描工具链。**本 Skill 是安全策略编排层与结果汇总层，而非扫描执行层。**
+
+| Skill 声明能力 | 实际执行工具（.gitlab-ci.yml） | Job | 状态 |
+|---------------|-------------------------------|-----|------|
+| SAST 代码安全扫描 | **Semgrep**（p/default + p/java + p/javascript + p/owasp-top-ten） | `security:sast` | ✅ 已配置 |
+| SCA 依赖漏洞扫描 | **Trivy fs**（backend/ + frontend/，HIGH+CRITICAL fail） | `security:dependency-scan` | ✅ 已配置 |
+| 密钥泄露检测 | **Gitleaks**（全仓库扫描） | `security:secret-detect` | ✅ 已配置 |
+| 容器镜像扫描 | **Trivy image**（推送后扫描，HIGH+CRITICAL fail） | `security:image-scan` | ✅ 已配置 |
+| DAST Web 应用扫描 | 未配置 | - | ⚠️ 规划中（需引入 OWASP ZAP） |
+| 渗透测试 | 未配置 | - | ⚠️ 规划中（需手动执行） |
+| 合规检查（OWASP/CWE/PCI DSS/GDPR/等保2.0） | Semgrep owasp-top-ten 规则集覆盖部分 | `security:sast` | 🟡 部分覆盖 |
+
+**调用约定**：
+- 当需要了解"项目有哪些安全扫描"时，查询本 Skill 的策略文档与映射表
+- 当需要实际执行安全扫描时，由 `.gitlab-ci.yml` 的 `security:*` jobs 自动完成，无需调用本 Skill 的 `action: "scan"` API
+- 当需要汇总安全扫描结果时，本 Skill 的 `action: "report"` API 可聚合 Trivy/Semgrep/Gitleaks 的 JSON 报告，生成统一安全审计报告
+- 本 Skill 的 `action: "scan"` API 仅作为编排接口保留，实际扫描由 .gitlab-ci.yml 的工具链完成
+- DAST 与渗透测试需手动触发，待 OWASP ZAP 集成后启用
 
 ## 功能
 

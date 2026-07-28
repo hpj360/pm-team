@@ -570,3 +570,24 @@ JSON 结构化输出，便于上游 Agent 解析与二次加工：
 | 文档编写 | `task-docs` | tech-writer | soft ← 上线验收 |
 
 > **并行阶段说明**: 后端开发与前端开发互为并行（均仅依赖设计评审），task-tracker 应识别二者均可执行并允许同时 `running`。产品设计依赖架构设计，但 UI 设计依赖产品设计而非架构设计，形成 `架构设计 → 产品设计 → UI设计` 的串行链路。
+
+### 与 CI/CD 流水线的映射
+
+本 Skill 的 PM 工作流任务模型（19 阶段）与 `.gitlab-ci.yml` 的技术流水线（8 阶段）是**不同维度**：PM 工作流关注人员协作与评审，CI/CD 关注构建测试部署。两者通过以下映射建立关联：
+
+| PM 工作流任务 | CI/CD 阶段 | 映射关系 |
+| ------------- | ---------- | -------- |
+| task-code-review（代码审查） | lint + test | PM 代码审查触发 CI 的 lint+test，CI 结果反馈至审查任务 |
+| task-security-audit（安全审计） | security | PM 安全审计任务对应 CI 的 security 阶段 |
+| task-testing（测试验证） | test + sonarqube:check | PM 测试验证任务消费 CI 的测试结果与覆盖率报告 |
+| task-test-review（测试评审） | - | 纯 PM 维度，Director 评审测试结果 |
+| task-staging-deploy（预发布部署） | deploy:staging | PM 部署任务触发 CI 的 staging 部署 |
+| task-staging-verify（预发布验证） | verify:health-check | PM 验证任务消费 CI 的健康检查结果 |
+| task-production-deploy（正式部署） | deploy:production | PM 部署任务触发 CI 的 production 部署（需手动审批） |
+| task-acceptance（上线验收） | verify:health-check（production） | PM 验收任务消费 CI 的生产健康检查结果 |
+
+**关联机制**：
+- PM 任务状态为 `running` 时，对应的 CI/CD pipeline 应已被触发（通过 Git push 或 MR）
+- CI/CD pipeline 完成后，其结果（成功/失败/覆盖率/漏洞数）应回写至对应 PM 任务的 `history` 记录
+- CI/CD pipeline 失败时，对应 PM 任务应标记为 `blocked`，原因为"CI/CD 流水线失败: <失败 job 名称>"
+- PM 任务的 `task.testing` 完成不等于 CI/CD 的 test 阶段完成；PM 任务是评审维度，CI/CD 是执行维度
