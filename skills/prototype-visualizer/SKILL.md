@@ -2,7 +2,9 @@
 
 ## 描述
 
-原型可视化工具，帮助产品设计师和UI设计师生成可视化的原型图、流程图和交互图。
+原型可视化工具，帮助产品设计师和 UI 设计师生成可视化的原型图、流程图和交互图。
+
+> **职责边界说明**: 本 Skill 专注于原型的**可视化展示**（visualize），生成 Mermaid/PlantUML 流程图、状态图与静态 HTML 预览。可交互原型的创建由 `interactive-prototype` 负责。两者分工：`prototype-visualizer` = 可视化展示与流程图；`interactive-prototype` = 创建可交互原型。本 Skill 的"交互原型"功能仅生成静态预览的 HTML，不支持路由跳转和状态管理，如需完整可交互原型请使用 `interactive-prototype`。
 
 ## 功能
 

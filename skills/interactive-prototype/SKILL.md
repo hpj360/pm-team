@@ -4,6 +4,8 @@
 
 交互式原型构建工具，生成可交互的高保真原型，支持页面跳转、表单验证、状态管理等交互能力。
 
+> **职责边界说明**: 本 Skill 专注于原型的**创建与构建**（build），生成可运行的原型项目。原型展示与流程图可视化由 `prototype-visualizer` 负责。两者分工：`interactive-prototype` = 创建可交互原型；`prototype-visualizer` = 可视化展示与流程图生成。当需求是"生成可点击运行的原型"时使用本 Skill；当需求是"生成 Mermaid/PlantUML 流程图或静态预览"时使用 `prototype-visualizer`。
+
 ## 功能
 
 ### 1. 交互原型生成

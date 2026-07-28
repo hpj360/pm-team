@@ -1,7 +1,7 @@
 {
   "project": {
     "name": "pm-team",
-    "version": "2.2.0",
+    "version": "3.0.0",
     "description": "产品全生命周期多角色协作团队"
   },
   "logs": {
@@ -9,7 +9,27 @@
     "tasks": "./logs/tasks",
     "workflow": "./logs/workflow",
     "approvals": "./logs/approvals",
-    "reports": "./logs/reports"
+    "reports": "./logs/reports",
+    "retention": {
+      "tasks": 30,
+      "workflow": 90,
+      "approvals": 365,
+      "reports": 365
+    },
+    "format": "structured",
+    "level": "info"
+  },
+  "workspaces": {
+    "path": "./workspaces",
+    "versioning": {
+      "enabled": true,
+      "maxVersions": 3,
+      "archivePath": "archive"
+    },
+    "naming": {
+      "artifacts": "{task-id}-{artifact-type}-{version}.{ext}",
+      "temp": "temp-{timestamp}-{name}.{ext}"
+    }
   },
   "agents": {
     "list": [
@@ -109,6 +129,138 @@
   "skills": {
     "paths": [
       "./skills"
+    ],
+    "bindings": [
+      {
+        "skill": "task-tracker",
+        "primaryAgent": "director",
+        "allAgents": true,
+        "usage": "Director 创建/调度/汇总任务；各 Agent 上报进度与状态"
+      },
+      {
+        "skill": "smart-scheduler",
+        "primaryAgent": "director",
+        "consumers": ["architect", "backend-developer", "frontend-developer"],
+        "usage": "Director 调度决策；架构师/开发者接收调度结果"
+      },
+      {
+        "skill": "quality-assessor",
+        "primaryAgent": "director",
+        "consumers": ["code-reviewer", "tester", "security-engineer"],
+        "usage": "Director 质量门禁；审查员/测试/安全触发评估"
+      },
+      {
+        "skill": "multi-project-manager",
+        "primaryAgent": "director",
+        "usage": "Director 跨项目资源协调与优先级决策"
+      },
+      {
+        "skill": "notification-system",
+        "primaryAgent": "director",
+        "usage": "阶段完成/错误/审批事件通知"
+      },
+      {
+        "skill": "agent-communication",
+        "primaryAgent": "director",
+        "allAgents": true,
+        "usage": "Agent 间同步/异步/广播通信"
+      },
+      {
+        "skill": "dashboard-visualizer",
+        "primaryAgent": "director",
+        "usage": "实时可视化任务看板与工作流"
+      },
+      {
+        "skill": "automation-tester",
+        "primaryAgent": "tester",
+        "consumers": ["code-reviewer"],
+        "usage": "Tester 执行测试与覆盖率分析；Code-reviewer 查阅测试结果辅助审查"
+      },
+      {
+        "skill": "database-design-toolkit",
+        "primaryAgent": "database-designer",
+        "usage": "Database-designer 进行 ER 图生成、DDL 生成、索引优化与数据迁移"
+      },
+      {
+        "skill": "requirement-analyzer",
+        "primaryAgent": "requirement-analyst",
+        "consumers": ["director"],
+        "usage": "Requirement-analyst 需求文档解析与拆解；Director 查阅需求优先级辅助决策"
+      },
+      {
+        "skill": "frontend-builder",
+        "primaryAgent": "frontend-developer",
+        "usage": "Frontend-developer 前端代码生成与组件库管理"
+      },
+      {
+        "skill": "security-scanner",
+        "primaryAgent": "security-engineer",
+        "consumers": ["code-reviewer"],
+        "usage": "Security-engineer 漏洞扫描与合规检查；Code-reviewer 查阅安全扫描结果"
+      },
+      {
+        "skill": "cicd-pipeline",
+        "primaryAgent": "operations",
+        "consumers": ["backend-developer", "frontend-developer", "tester"],
+        "usage": "Operations 流水线编排与部署执行；开发者/测试查阅构建与测试结果"
+      },
+      {
+        "skill": "code-analyzer",
+        "primaryAgent": "code-reviewer",
+        "consumers": ["architect", "backend-developer", "frontend-developer"],
+        "usage": "Code-reviewer 代码质量分析；架构师/开发者查阅复杂度与重复代码"
+      },
+      {
+        "skill": "ui-design-toolkit",
+        "primaryAgent": "ui-designer",
+        "usage": "UI-designer 设计系统生成与组件模板库管理"
+      },
+      {
+        "skill": "design-delivery",
+        "primaryAgent": "ui-designer",
+        "consumers": ["frontend-developer"],
+        "usage": "UI-designer 生成规范文档/切图/Token；Frontend-developer 消费设计 Token"
+      },
+      {
+        "skill": "interactive-prototype",
+        "primaryAgent": "product-designer",
+        "usage": "Product-designer 创建可交互高保真原型"
+      },
+      {
+        "skill": "prototype-visualizer",
+        "primaryAgent": "product-designer",
+        "consumers": ["director"],
+        "usage": "Product-designer 生成流程图与可视化；Director 查阅流程图辅助评审"
+      },
+      {
+        "skill": "monitor-alert",
+        "primaryAgent": "operations",
+        "usage": "Operations 系统监控、性能指标跟踪与自动告警"
+      },
+      {
+        "skill": "deployer",
+        "primaryAgent": "operations",
+        "consumers": ["tester"],
+        "usage": "Operations 部署后健康检查与验证；Tester 验证部署结果。部署执行/回滚委托 cicd-pipeline"
+      },
+      {
+        "skill": "api-mock",
+        "primaryAgent": "frontend-developer",
+        "consumers": ["backend-developer", "tester"],
+        "usage": "Frontend-developer 联调时 Mock API；Backend-developer 定义接口契约；Tester 验证 Mock 一致性"
+      },
+      {
+        "skill": "data-analytics",
+        "primaryAgent": "product-designer",
+        "consumers": ["director"],
+        "usage": "Product-designer 数据洞察辅助决策；Director 查阅业务指标"
+      },
+      {
+        "skill": "knowledge-base",
+        "primaryAgent": "tech-writer",
+        "consumers": ["all"],
+        "usage": "Tech-writer 维护知识库；所有 Agent 检索项目知识与文档"
+      }
     ]
   },
   "bindings": [
@@ -310,6 +462,170 @@
     "onStageComplete": true,
     "onError": true,
     "onApprovalRequired": true,
-    "channels": ["default"]
+    "channels": ["feishu", "email", "webhook", "in-app"],
+    "templates": {
+      "stage-complete": "阶段 {{stage}} 已完成，状态: {{status}}",
+      "error-occurred": "错误: {{error}} 在阶段 {{stage}}",
+      "approval-required": "需要审批: {{stage}}，请 {{approvers}} 处理",
+      "task-assigned": "任务 {{taskName}} 已分配给 {{agent}}",
+      "milestone-reached": "里程碑达成: {{milestone}}"
+    },
+    "rules": [
+      { "event": "stage.complete", "channels": ["feishu"], "priority": "normal" },
+      { "event": "error.occurred", "channels": ["feishu", "email"], "priority": "high" },
+      { "event": "approval.required", "channels": ["feishu", "email"], "priority": "high" }
+    ]
+  },
+  "taskTracking": {
+    "enabled": true,
+    "realtime": true,
+    "skill": "./skills/task-tracker",
+    "storage": {
+      "backend": "file",
+      "path": "./workspaces/.task-tracker",
+      "autosave": true,
+      "autosaveInterval": "10s"
+    },
+    "states": ["pending", "running", "completed", "failed", "blocked"],
+    "stateTransitions": {
+      "pending->running": "依赖全部完成且资源就绪",
+      "running->completed|failed|blocked": "执行结果决定",
+      "blocked->running": "阻塞解除后恢复",
+      "failed->pending": "重试时回退",
+      "completed": "终态，不可回退"
+    },
+    "progress": {
+      "calculation": "weighted",
+      "autoEstimate": true,
+      "staleThreshold": "1h",
+      "defaultWeight": 1
+    },
+    "dependency": {
+      "detectCycle": true,
+      "autoStart": true,
+      "criticalPath": true,
+      "types": ["hard", "soft", "resource"]
+    },
+    "history": {
+      "enabled": true,
+      "retention": "30d",
+      "maxRecordsPerTask": 100
+    },
+    "report": {
+      "defaultType": "progress",
+      "format": "markdown",
+      "timezone": "Asia/Shanghai",
+      "types": ["progress", "agent", "dependency", "history", "summary"]
+    },
+    "integrations": {
+      "smartScheduler": { "feedHistory": true, "updateEstimate": true },
+      "qualityAssessor": { "triggerOnComplete": true },
+      "multiProjectManager": { "shareTaskView": true },
+      "notificationSystem": { "events": ["task.created", "task.completed", "task.blocked", "task.failed"] },
+      "dashboardVisualizer": { "realtimeFeed": true }
+    }
+  },
+  "agentCommunication": {
+    "enabled": true,
+    "modes": ["sync", "async", "broadcast", "subscribe"],
+    "messageQueue": {
+      "type": "in-memory",
+      "maxSize": 1000,
+      "ttl": 3600
+    },
+    "priorities": ["high", "normal", "low"]
+  },
+  "dashboard": {
+    "enabled": true,
+    "types": ["kanban", "gantt", "statistics", "workload", "workflow"],
+    "realtime": true,
+    "outputFormats": ["html", "mermaid", "ascii"],
+    "refreshInterval": 30
+  },
+  "automation": {
+    "testing": {
+      "enabled": true,
+      "types": ["unit", "integration", "api", "e2e", "performance"],
+      "frameworks": ["junit", "jest", "selenium", "jmeter"],
+      "coverage": {
+        "enabled": true,
+        "threshold": 80
+      },
+      "autoTrigger": true
+    },
+    "cicd": {
+      "enabled": true,
+      "stages": ["checkout", "lint", "build", "test", "security", "package", "deploy", "verify"],
+      "triggers": ["push", "pull-request", "manual", "scheduled"],
+      "deployStrategy": ["blue-green", "rolling", "canary"],
+      "rollback": {
+        "enabled": true,
+        "autoRollback": true,
+        "threshold": 3
+      }
+    }
+  },
+  "analytics": {
+    "enabled": true,
+    "dataCollection": {
+      "types": ["task", "agent", "quality", "process", "resource"],
+      "interval": 300
+    },
+    "metrics": {
+      "efficiency": ["completion-rate", "avg-completion-time", "agent-utilization"],
+      "quality": ["defect-rate", "test-coverage", "review-pass-rate"],
+      "process": ["stage-duration", "bottleneck-identification", "approval-rate"],
+      "resource": ["agent-workload", "parallel-tasks"]
+    },
+    "reports": ["daily", "weekly", "monthly", "quarterly"],
+    "prediction": {
+      "enabled": true,
+      "models": ["completion-time", "resource-demand", "quality-trend"]
+    },
+    "anomalyDetection": true
+  },
+  "intelligence": {
+    "smartScheduling": {
+      "enabled": true,
+      "strategies": ["capability-match", "load-balance", "priority", "dependency-aware", "predictive"],
+      "algorithms": ["weighted-scoring", "greedy", "genetic"],
+      "learning": {
+        "enabled": true,
+        "model": "reinforcement",
+        "updateInterval": 86400
+      },
+      "decisionFactors": ["capability-score", "current-load", "historical-performance", "task-complexity"]
+    },
+    "qualityAssessment": {
+      "enabled": true,
+      "dimensions": ["completeness", "accuracy", "standards", "readability"],
+      "scoring": {
+        "range": "0-100",
+        "levels": ["A", "B", "C", "D", "F"],
+        "baseline": 85
+      },
+      "types": ["document", "code", "design", "test"],
+      "autoAssess": true
+    },
+    "knowledgeBase": {
+      "enabled": true,
+      "storage": "./workspaces/knowledge-base",
+      "types": ["requirement", "architecture", "design", "development", "testing", "operations"],
+      "features": {
+        "search": true,
+        "recommend": true,
+        "knowledgeGraph": true,
+        "versioning": true
+      },
+      "autoCollect": true
+    },
+    "multiProject": {
+      "enabled": true,
+      "maxProjects": 10,
+      "states": ["planning", "active", "paused", "completed", "archived"],
+      "resourceAllocation": ["exclusive", "shared", "proportional"],
+      "conflictResolution": ["priority", "time-slice", "resource-sharing"],
+      "priorityLevels": ["critical", "high", "medium", "low"]
+    }
   }
 }

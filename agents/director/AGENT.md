@@ -116,6 +116,78 @@ API文档输出                     前端页面(Mock)
 - `operations`: 运维工程师
 - `tech-writer`: 技术文档工程师
 
+### task_tracker
+
+任务进度跟踪工具（Skill: `./skills/task-tracker`），用于任务全生命周期管理、依赖编排与进度汇总。作为 Director 的核心工具，支撑"进度跟踪"与"质量把控"职责的落地。
+
+**核心能力**:
+- 创建任务并维护 DAG 依赖关系（hard/soft/resource 三类）
+- 实时接收各 Agent 的进度上报（progress / currentStage / estimatedTime）
+- 自动检测阻塞链路、循环依赖与关键路径
+- 生成进度报告（Markdown 表格 / JSON 结构化输出）
+
+**使用时机**:
+- 流程启动时：为每个工作流阶段创建对应任务，建立依赖关系
+- Agent 调度前：查询依赖状态，确认可执行任务
+- Agent 执行中：接收进度上报，更新任务状态
+- 阶段完成时：标记任务完成，触发下游依赖任务
+- 异常发生时：标记阻塞/失败，记录原因并回溯阻塞链路
+- 评审节点：生成进度报告，辅助评审决策
+
+**与其他 Skill 的协作**:
+- `smart-scheduler`：提供历史任务数据供调度算法学习；接收调度器下发的预估耗时
+- `quality-assessor`：任务标记 `completed` 时触发质量评估
+- `multi-project-manager`：共享任务视图，支撑跨项目资源决策
+- `notification-system`：任务状态变更时推送通知（task.created / task.completed / task.blocked / task.failed）
+- `dashboard-visualizer`：实时推送任务进度数据至可视化看板
+
+**典型用法**:
+
+创建工作流任务：
+```json
+{
+  "action": "create",
+  "task": {
+    "id": "task-req-analysis",
+    "name": "需求分析",
+    "agent": "requirement-analyst",
+    "dependencies": []
+  }
+}
+```
+
+创建带依赖的下游任务：
+```json
+{
+  "action": "create",
+  "task": {
+    "id": "task-arch-design",
+    "name": "架构设计",
+    "agent": "architect",
+    "dependencies": [
+      { "taskId": "task-req-review", "type": "hard" }
+    ],
+    "priority": "high",
+    "estimatedHours": 8
+  }
+}
+```
+
+查询整体进度：
+```json
+{ "action": "report", "type": "progress" }
+```
+
+标记阻塞并回溯：
+```json
+{
+  "action": "block",
+  "taskId": "task-security-audit",
+  "reason": "等待代码评审完成",
+  "blockedBy": "task-code-review"
+}
+```
+
 ## 评审节点
 
 ### 1. 需求评审
@@ -276,7 +348,8 @@ API文档输出                     前端页面(Mock)
 3. **各环节结果**: 汇总各Agent的关键输出
 4. **评审记录**: 记录各评审节点的决策
 5. **最终交付物**: 整合后的完整交付内容
-6. **后续建议**: 如有需要，提出下一步行动建议
+6. **任务进度报告**: 通过 `task-tracker` 生成进度报告，包含任务状态分布、阻塞任务、Agent 维度统计
+7. **后续建议**: 如有需要，提出下一步行动建议
 
 ## 工作空间
 

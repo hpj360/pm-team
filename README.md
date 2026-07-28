@@ -194,17 +194,31 @@ pm-team/
 │   ├── tester/                # 测试工程师
 │   ├── operations/            # 运维工程师
 │   └── tech-writer/           # 技术文档工程师
-├── skills/                    # 技能定义目录 (10个)
-│   ├── requirement-analyzer/  # 需求分析技能
-│   ├── code-analyzer/         # 代码分析技能
-│   ├── test-runner/           # 测试执行技能
-│   ├── deployer/              # 部署技能
-│   ├── ui-design-toolkit/     # UI设计工具
-│   ├── frontend-builder/      # 前端构建工具
+├── skills/                    # 技能定义目录 (24个)
+│   ├── agent-communication/   # Agent 间通信技能
 │   ├── api-mock/              # API Mock工具
-│   ├── monitor-alert/         # 监控告警工具
-│   ├── security-scanner/      # 安全扫描工具
-│   └── database-designer/     # 数据库设计工具
+│   ├── automation-tester/     # 自动化测试技能（已合并 test-runner）
+│   ├── cicd-pipeline/         # CI/CD 流水线技能
+│   ├── code-analyzer/         # 代码质量分析技能（安全扫描委托 security-scanner）
+│   ├── dashboard-visualizer/  # 可视化看板技能
+│   ├── data-analytics/        # 数据分析技能
+│   ├── database-design-toolkit/ # 数据库设计工具包（原 database-designer，重命名避免与 Agent 同名）
+│   ├── deployer/              # 部署健康检查与验证技能（部署执行委托 cicd-pipeline）
+│   ├── design-delivery/       # 设计交付技能（切图/标注/Token 唯一负责方）
+│   ├── frontend-builder/      # 前端构建工具
+│   ├── interactive-prototype/# 交互原型创建技能（创建）
+│   ├── knowledge-base/        # 知识库技能
+│   ├── monitor-alert/        # 监控告警工具
+│   ├── multi-project-manager/ # 多项目管理技能
+│   ├── notification-system/   # 通知系统技能
+│   ├── prototype-visualizer/  # 原型可视化技能（展示）
+│   ├── quality-assessor/      # 质量评估技能
+│   ├── requirement-analyzer/  # 需求分析技能
+│   ├── security-scanner/      # 安全扫描技能（安全漏洞扫描唯一负责方）
+│   ├── smart-scheduler/       # 智能调度技能
+│   ├── task-tracker/          # 任务跟踪技能
+│   ├── test-runner/           # 已废弃，合并至 automation-tester
+│   └── ui-design-toolkit/     # UI设计工具（设计系统+组件模板，切图/标注委托 design-delivery）
 ├── workspaces/               # 工作空间目录 (13个)
 │   ├── director/
 │   ├── requirement-analyst/
