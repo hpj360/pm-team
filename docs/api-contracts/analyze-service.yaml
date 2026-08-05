@@ -1,0 +1,462 @@
+openapi: 3.0.3
+info:
+  title: 红方文件汇聚平台 - 分析服务 API
+  description: |
+    分析服务，提供实体识别、IOC 提取、沙箱分析、威胁情报关联能力。
+
+    - 服务端口：8084
+    - API 前缀：/api/v1
+    - 认证方式：Bearer JWT
+    - 限流策略：200 QPS / 租户
+    - 分析引擎：NER 模型 + IOC 规则引擎 + 沙箱
+  version: 1.0.0
+  contact:
+    name: 红方团队
+    email: redteam@example.com
+
+servers:
+  - url: http://localhost:8084
+    description: 本地开发环境
+  - url: https://api.redteam.internal/analyze
+    description: 生产环境
+
+tags:
+  - name: 文件分析
+    description: 触发分析、查询结果
+  - name: 实体识别
+    description: NER 命名实体识别
+  - name: IOC 提取
+    description: 威胁指标提取
+  - name: 沙箱分析
+    description: 动态行为分析
+
+paths:
+  /api/v1/analyze/{fileId}:
+    post:
+      tags: [文件分析]
+      summary: 触发文件分析
+      description: |
+        异步触发文件分析任务，包含实体识别、IOC 提取、威胁情报关联。
+        返回任务 ID 后可通过 /result 轮询或订阅 Kafka 事件获取结果。
+      operationId: analyzeFile
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                analyze_types:
+                  type: array
+                  description: 分析类型组合
+                  items:
+                    type: string
+                    enum: [NER, IOC, THREAT_INTEL, SENTIMENT, CLASSIFY]
+                  default: [NER, IOC]
+                threat_intel_sources:
+                  type: array
+                  items:
+                    type: string
+                  description: 威胁情报数据源（如 virus_total、otx）
+                priority:
+                  type: string
+                  enum: [LOW, NORMAL, HIGH, URGENT]
+                  default: NORMAL
+                sandbox_enabled:
+                  type: boolean
+                  description: 是否同时触发沙箱分析
+                  default: false
+      responses:
+        '200':
+          description: 任务已触发
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          task_id:
+                            type: string
+                          file_id:
+                            type: string
+                          status:
+                            type: string
+                            enum: [PENDING, RUNNING]
+                          estimated_duration_ms:
+                            type: integer
+
+  /api/v1/analyze/{fileId}/result:
+    get:
+      tags: [文件分析]
+      summary: 分析结果
+      description: 获取文件分析的综合结果。
+      operationId: getAnalyzeResult
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/AnalyzeResult'
+        '404':
+          description: 分析任务不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+              example:
+                code: 50002
+                message: 分析任务不存在
+                data: null
+                timestamp: 1785086825000
+
+  /api/v1/analyze/{fileId}/entities:
+    get:
+      tags: [实体识别]
+      summary: 实体识别结果
+      description: 获取文件中识别出的命名实体（人名、机构、地名、IP、域名等）。
+      operationId: getEntities
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+        - name: entityType
+          in: query
+          description: 实体类型过滤
+          schema:
+            type: string
+            enum: [PERSON, ORGANIZATION, LOCATION, IP, DOMAIN, URL, EMAIL, HASH, CVE, MALWARE]
+        - name: minConfidence
+          in: query
+          description: 最小置信度（0-1）
+          schema:
+            type: number
+            format: float
+            minimum: 0
+            maximum: 1
+            default: 0.5
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Entity'
+
+  /api/v1/analyze/{fileId}/iocs:
+    get:
+      tags: [IOC 提取]
+      summary: IOC 提取结果
+      description: 获取文件中提取的威胁指标（IP/域名/URL/哈希/Mutex 等）。
+      operationId: getIocs
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+        - name: iocType
+          in: query
+          schema:
+            type: string
+            enum: [IP, DOMAIN, URL, HASH_MD5, HASH_SHA256, EMAIL, MUTEX, REGISTRY, FILE_PATH, CVE]
+        - name: malicious
+          in: query
+          description: 仅返回恶意 IOC
+          schema:
+            type: boolean
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Ioc'
+
+  /api/v1/analyze/sandbox:
+    post:
+      tags: [沙箱分析]
+      summary: 沙箱分析
+      description: |
+        将文件提交至沙箱执行，捕获动态行为（进程、网络、文件、注册表）。
+        支持多环境（Windows/Linux/Android）。
+      operationId: sandboxAnalyze
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file_id:
+                  type: string
+                  description: 文件 ID
+                environment:
+                  type: string
+                  enum: [WINDOWS7, WINDOWS10, LINUX_UBUNTU, ANDROID]
+                  default: WINDOWS10
+                timeout:
+                  type: integer
+                  description: 沙箱运行超时（秒），最大 600
+                  default: 120
+                network_enabled:
+                  type: boolean
+                  description: 是否启用网络模拟
+                  default: false
+                priority:
+                  type: string
+                  enum: [LOW, NORMAL, HIGH, URGENT]
+                  default: NORMAL
+              required: [file_id, environment]
+      responses:
+        '200':
+          description: 沙箱任务已提交
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          sandbox_id:
+                            type: string
+                            description: 沙箱任务 ID
+                          file_id:
+                            type: string
+                          status:
+                            type: string
+                            enum: [PENDING, RUNNING, SUCCESS, FAILED]
+                          report_url:
+                            type: string
+                            description: 沙箱报告 URL（完成后生成）
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    FileIdPath:
+      name: fileId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: 参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+
+  schemas:
+    ApiResult:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          nullable: true
+        timestamp:
+          type: integer
+          format: int64
+      required: [code, message, timestamp]
+
+    AnalyzeResult:
+      type: object
+      description: 综合分析结果
+      properties:
+        file_id:
+          type: string
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, RUNNING, SUCCESS, FAILED]
+        analyze_types:
+          type: array
+          items:
+            type: string
+        threat_level:
+          type: string
+          enum: [SAFE, LOW, MEDIUM, HIGH, CRITICAL]
+          description: 综合威胁等级
+        threat_score:
+          type: number
+          format: float
+          description: 威胁评分（0-100）
+        summary:
+          type: string
+          description: 分析摘要
+        entity_count:
+          type: integer
+        ioc_count:
+          type: integer
+        malicious_ioc_count:
+          type: integer
+        entities:
+          type: array
+          items:
+            $ref: '#/components/schemas/Entity'
+        iocs:
+          type: array
+          items:
+            $ref: '#/components/schemas/Ioc'
+        threat_intel:
+          type: array
+          items:
+            $ref: '#/components/schemas/ThreatIntel'
+        classifications:
+          type: array
+          description: 文件分类标签
+          items:
+            type: object
+            properties:
+              category:
+                type: string
+                example: malware/ransomware
+              confidence:
+                type: number
+                format: float
+        analyzed_at:
+          type: integer
+          format: int64
+        duration_ms:
+          type: integer
+
+    Entity:
+      type: object
+      description: 命名实体
+      properties:
+        entity_id:
+          type: string
+        text:
+          type: string
+          description: 实体文本
+        type:
+          type: string
+          enum: [PERSON, ORGANIZATION, LOCATION, IP, DOMAIN, URL, EMAIL, HASH, CVE, MALWARE]
+        start:
+          type: integer
+          description: 在原文中的起始位置
+        end:
+          type: integer
+          description: 在原文中的结束位置
+        confidence:
+          type: number
+          format: float
+          description: 置信度（0-1）
+        normalized:
+          type: string
+          description: 标准化后的值
+        context:
+          type: string
+          description: 上下文片段
+
+    Ioc:
+      type: object
+      description: 威胁指标
+      properties:
+        ioc_id:
+          type: string
+        value:
+          type: string
+          description: IOC 值
+        type:
+          type: string
+          enum: [IP, DOMAIN, URL, HASH_MD5, HASH_SHA256, EMAIL, MUTEX, REGISTRY, FILE_PATH, CVE]
+        malicious:
+          type: boolean
+          description: 是否恶意
+        confidence:
+          type: number
+          format: float
+        threat_intel_hits:
+          type: integer
+          description: 命中威胁情报次数
+        tags:
+          type: array
+          items:
+            type: string
+          description: 标签（如 apt28、ransomware）
+        first_seen:
+          type: integer
+          format: int64
+        last_seen:
+          type: integer
+          format: int64
+        sources:
+          type: array
+          items:
+            type: string
+          description: 数据来源
+
+    ThreatIntel:
+      type: object
+      description: 威胁情报
+      properties:
+        ioc_value:
+          type: string
+        source:
+          type: string
+          description: 情报源
+        malicious:
+          type: boolean
+        severity:
+          type: string
+          enum: [INFO, LOW, MEDIUM, HIGH, CRITICAL]
+        description:
+          type: string
+        malware_families:
+          type: array
+          items:
+            type: string
+        threat_actors:
+          type: array
+          items:
+            type: string
+        first_seen:
+          type: integer
+          format: int64
+        last_seen:
+          type: integer
+          format: int64

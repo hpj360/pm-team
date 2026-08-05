@@ -1,0 +1,159 @@
+# ==========================================
+# 红方文件分析管理平台 - Prometheus 告警规则 (v5.4)
+# ==========================================
+# 部署：将本文件挂载到 Prometheus 容器的 rule_files 路径，并在 prometheus.yml 中引用：
+#   rule_files:
+#     - /etc/prometheus/rules/prometheus-alert-rules.yml
+# 与 common/src/main/resources/alert-rules.yml 保持一致（后者为应用内声明式定义）。
+# 严重等级与触达策略：
+#   P0 致命：电话（预留）+ 飞书红色加急 + @all
+#   P1 严重：飞书橙/红色加急 + @all
+#   P2 一般：飞书蓝色普通卡片
+# ==========================================
+
+groups:
+  - name: redteam-http
+    interval: 30s
+    rules:
+      # HTTP 5xx 错误率过高
+      - alert: error_rate_high
+        expr: |
+          sum(rate(http_server_requests_seconds_count{status=~"5.."}[5m])) by (service)
+          / sum(rate(http_server_requests_seconds_count[5m])) by (service)
+          > 0.05
+        for: 5m
+        labels:
+          severity: P1
+          category: http
+        annotations:
+          summary: "HTTP 5xx 错误率过高 (service={{ $labels.service }})"
+          description: "服务 {{ $labels.service }} 近 5 分钟 5xx 错误率达 {{ $value | humanizePercentage }}，超过阈值 5%"
+          runbook: "https://wiki.redteam/ops/runbook/http-5xx"
+
+      # HTTP P95 延迟过高
+      - alert: http_p95_latency_high
+        expr: |
+          histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket[5m])) by (le, service))
+          > 2
+        for: 10m
+        labels:
+          severity: P2
+          category: http
+        annotations:
+          summary: "HTTP P95 延迟过高 (service={{ $labels.service }})"
+          description: "服务 {{ $labels.service }} P95 延迟 {{ $value }}s，超过 2s 阈值持续 10 分钟"
+          runbook: "https://wiki.redteam/ops/runbook/http-latency"
+
+      # 服务实例宕机
+      - alert: service_down
+        expr: up{job=~"redteam-.*"} == 0
+        for: 1m
+        labels:
+          severity: P0
+          category: availability
+        annotations:
+          summary: "服务实例宕机 (instance={{ $labels.instance }})"
+          description: "实例 {{ $labels.instance }} (job={{ $labels.job }}) 已宕机超过 1 分钟"
+          runbook: "https://wiki.redteam/ops/runbook/service-down"
+
+  - name: redteam-business
+    interval: 30s
+    rules:
+      # AI 服务出现降级调用
+      - alert: ai_degraded
+        expr: increase(ai_invoke_total{result="degraded"}[1m]) > 0
+        for: 1m
+        labels:
+          severity: P1
+          category: ai
+        annotations:
+          summary: "AI 服务出现降级调用 (service={{ $labels.service }})"
+          description: "AI 服务 {{ $labels.service }} 出现降级调用，需检查模型服务可用性"
+          runbook: "https://wiki.redteam/ops/runbook/ai-degraded"
+
+      # AI 调用失败率过高
+      - alert: ai_failure_rate_high
+        expr: |
+          sum(rate(ai_invoke_total{result="fail"}[5m])) by (service)
+          / sum(rate(ai_invoke_total[5m])) by (service)
+          > 0.1
+        for: 5m
+        labels:
+          severity: P1
+          category: ai
+        annotations:
+          summary: "AI 调用失败率过高 (service={{ $labels.service }})"
+          description: "AI 服务 {{ $labels.service }} 失败率 {{ $value | humanizePercentage }}，超过 10% 阈值"
+          runbook: "https://wiki.redteam/ops/runbook/ai-failure"
+
+      # 文件解析失败率过高
+      - alert: file_parse_failure_high
+        expr: |
+          sum(rate(file_parse_total{status="fail"}[10m])) by (service)
+          / sum(rate(file_parse_total[10m])) by (service)
+          > 0.2
+        for: 10m
+        labels:
+          severity: P2
+          category: file
+        annotations:
+          summary: "文件解析失败率过高 (service={{ $labels.service }})"
+          description: "解析服务 {{ $labels.service }} 失败率 {{ $value | humanizePercentage }}，超过 20% 阈值"
+          runbook: "https://wiki.redteam/ops/runbook/parse-failure"
+
+  - name: redteam-middleware
+    interval: 30s
+    rules:
+      # 限流频繁触发
+      - alert: rate_limit_triggered
+        expr: increase(rate_limited_total[2m]) > 100
+        for: 2m
+        labels:
+          severity: P2
+          category: ratelimit
+        annotations:
+          summary: "限流频繁触发 (service={{ $labels.service }})"
+          description: "服务 {{ $labels.service }} 近 2 分钟限流触发 {{ $value }} 次，需关注流量或容量"
+          runbook: "https://wiki.redteam/ops/runbook/rate-limit"
+
+      # Kafka 消费积压过高
+      - alert: kafka_lag_high
+        expr: kafka_lag > 10000
+        for: 5m
+        labels:
+          severity: P1
+          category: kafka
+        annotations:
+          summary: "Kafka 消费积压过高 (topic={{ $labels.topic }})"
+          description: "Kafka topic {{ $labels.topic }} 积压 {{ $value }} 条消息，超过 10000 阈值持续 5 分钟，消费者可能阻塞"
+          runbook: "https://wiki.redteam/ops/runbook/kafka-lag"
+
+  - name: redteam-jvm
+    interval: 30s
+    rules:
+      # JVM 堆内存使用率过高
+      - alert: jvm_heap_usage_high
+        expr: |
+          jvm_memory_used_bytes{area="heap"}
+          / jvm_memory_max_bytes{area="heap"}
+          > 0.9
+        for: 5m
+        labels:
+          severity: P1
+          category: jvm
+        annotations:
+          summary: "JVM 堆内存使用率过高 (service={{ $labels.service }})"
+          description: "服务 {{ $labels.service }} 堆内存使用率 {{ $value | humanizePercentage }}，超过 90% 阈值，存在 OOM 风险"
+          runbook: "https://wiki.redteam/ops/runbook/jvm-heap"
+
+      # GC 耗时过长
+      - alert: jvm_gc_pause_high
+        expr: rate(jvm_gc_pause_seconds_sum[5m]) / rate(jvm_gc_pause_seconds_count[5m]) > 0.5
+        for: 10m
+        labels:
+          severity: P2
+          category: jvm
+        annotations:
+          summary: "JVM GC 平均耗时过长 (service={{ $labels.service }})"
+          description: "服务 {{ $labels.service }} GC 平均耗时 {{ $value }}s，超过 0.5s 阈值"
+          runbook: "https://wiki.redteam/ops/runbook/jvm-gc"

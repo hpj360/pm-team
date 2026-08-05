@@ -22,6 +22,18 @@ public interface UserService extends IService<UserEntity> {
     LoginVO login(LoginDTO loginDTO);
 
     /**
+     * MFA 二阶段登录验证（v2.3 新增）
+     *
+     * <p>登录第一阶段返回 mfaToken 后，前端调用本方法提交 MFA 验证码，
+     * 验证通过后发放正式 access/refresh token。</p>
+     *
+     * @param mfaToken 第一阶段返回的 MFA 临时 Token
+     * @param code     MFA 验证码（TOTP 动态码或备用码）
+     * @return 登录响应（包含正式 token 与用户信息）
+     */
+    LoginVO completeMfaLogin(String mfaToken, String code);
+
+    /**
      * 用户登出
      *
      * @param token Token

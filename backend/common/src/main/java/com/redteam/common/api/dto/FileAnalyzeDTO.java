@@ -24,6 +24,18 @@ public class FileAnalyzeDTO implements Serializable {
     private Long fileId;
 
     /**
+     * 文件路径（用于读取文件内容进行分析）
+     */
+    @Schema(description = "文件路径")
+    private String filePath;
+
+    /**
+     * 文本内容（直接传入文本时使用，优先级高于 filePath）
+     */
+    @Schema(description = "文本内容")
+    private String textContent;
+
+    /**
      * 文件ID列表（批量分析）
      */
     @Schema(description = "文件ID列表（批量分析）")

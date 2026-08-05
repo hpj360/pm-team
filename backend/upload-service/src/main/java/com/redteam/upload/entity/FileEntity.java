@@ -48,14 +48,39 @@ public class FileEntity extends BaseEntity {
     private String mimeType;
 
     /**
-     * 文件MD5值
+     * 文件MD5值（兼容性保留）
      */
     private String fileMd5;
+
+    /**
+     * 文件SM3值（国密合规，主用文件指纹）
+     */
+    private String fileSm3;
 
     /**
      * 文件SHA256值
      */
     private String fileSha256;
+
+    /**
+     * MinIO 多段上传 ID（用于断点续传）
+     */
+    private String uploadId;
+
+    /**
+     * 分片总数
+     */
+    private Integer chunkCount;
+
+    /**
+     * 单分片大小（字节）
+     */
+    private Long chunkSize;
+
+    /**
+     * 上传状态（UPLOADING/COMPLETED/FAILED/CANCELLED）
+     */
+    private String uploadStatus;
 
     /**
      * 来源类型（1-上传，2-爬取，3-导入）
@@ -111,4 +136,9 @@ public class FileEntity extends BaseEntity {
      * 预览次数
      */
     private Integer previewCount;
+
+    /**
+     * 密级：PUBLIC/INTERNAL/CONFIDENTIAL/SECRET（v4.2.3 新增）
+     */
+    private String classification;
 }

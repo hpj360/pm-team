@@ -1,0 +1,35 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.redteam.common.mapper.AttackChainMapper">
+
+    <!-- 通用结果映射 -->
+    <resultMap id="AttackChainResultMap" type="com.redteam.common.entity.AttackChainEntity">
+        <id     column="id"            property="id"/>
+        <result column="file_id"       property="fileId"/>
+        <result column="attack_paths"  property="attackPaths"/>
+        <result column="confidence"    property="confidence"/>
+        <result column="reasoning"     property="reasoning"/>
+        <result column="model"         property="model"/>
+        <result column="tokens_used"   property="tokensUsed"/>
+        <result column="status"        property="status"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="created_at"    property="createdAt"/>
+        <result column="updated_at"    property="updatedAt"/>
+    </resultMap>
+
+    <!-- 公共字段列 -->
+    <sql id="Base_Column_List">
+        id, file_id, attack_paths, confidence, reasoning, model,
+        tokens_used, status, error_message, created_at, updated_at
+    </sql>
+
+    <!-- 按文件ID查询最新推理结果 -->
+    <select id="selectByFileId" resultMap="AttackChainResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ai_attack_chain
+        WHERE file_id = #{fileId}
+        ORDER BY id DESC
+        LIMIT 1
+    </select>
+
+</mapper>

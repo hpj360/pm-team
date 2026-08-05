@@ -1,0 +1,36 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.redteam.common.mapper.ThreatSummaryMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="ThreatSummaryResultMap" type="com.redteam.common.entity.ThreatSummaryEntity">
+        <id column="id" property="id"/>
+        <result column="file_id" property="fileId"/>
+        <result column="summary" property="summary"/>
+        <result column="key_findings" property="keyFindings"/>
+        <result column="suggested_actions" property="suggestedActions"/>
+        <result column="model" property="model"/>
+        <result column="tokens_used" property="tokensUsed"/>
+        <result column="status" property="status"/>
+        <result column="error_message" property="errorMessage"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <!-- 通用列 -->
+    <sql id="Base_Column_List">
+        id, file_id, summary, key_findings, suggested_actions, model,
+        tokens_used, status, error_message, created_at, updated_at
+    </sql>
+
+    <!-- 按文件ID查询威胁摘要（返回最新一条） -->
+    <select id="selectByFileId" resultMap="ThreatSummaryResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM ai_threat_summary
+        WHERE file_id = #{fileId}
+        ORDER BY created_at DESC
+        LIMIT 1
+    </select>
+
+</mapper>

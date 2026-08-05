@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.redteam.common.mapper.AuditLogMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="AuditLogResultMap" type="com.redteam.common.entity.AuditLogEntity">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="username" property="username"/>
+        <result column="action" property="action"/>
+        <result column="resource_type" property="resourceType"/>
+        <result column="resource_id" property="resourceId"/>
+        <result column="resource_name" property="resourceName"/>
+        <result column="ip_address" property="ipAddress"/>
+        <result column="user_agent" property="userAgent"/>
+        <result column="detail" property="detail"/>
+        <result column="status" property="status"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <!-- 通用列 -->
+    <sql id="Base_Column_List">
+        id, user_id, username, action, resource_type, resource_id, resource_name,
+        ip_address, user_agent, detail, status, created_at
+    </sql>
+
+    <!-- 按多条件查询审计日志（按创建时间倒序） -->
+    <select id="selectByConditions" resultMap="AuditLogResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM audit_log
+        <where>
+            <if test="userId != null">
+                AND user_id = #{userId}
+            </if>
+            <if test="action != null and action != ''">
+                AND action = #{action}
+            </if>
+            <if test="resourceType != null and resourceType != ''">
+                AND resource_type = #{resourceType}
+            </if>
+            <if test="startTime != null">
+                AND created_at &gt;= #{startTime}
+            </if>
+            <if test="endTime != null">
+                AND created_at &lt;= #{endTime}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 按多条件分页查询审计日志（MyBatis-Plus 分页插件自动注入 limit） -->
+    <select id="selectByConditionsPage" resultMap="AuditLogResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM audit_log
+        <where>
+            <if test="userId != null">
+                AND user_id = #{userId}
+            </if>
+            <if test="action != null and action != ''">
+                AND action = #{action}
+            </if>
+            <if test="resourceType != null and resourceType != ''">
+                AND resource_type = #{resourceType}
+            </if>
+            <if test="startTime != null">
+                AND created_at &gt;= #{startTime}
+            </if>
+            <if test="endTime != null">
+                AND created_at &lt;= #{endTime}
+            </if>
+        </where>
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 按操作类型统计数量 -->
+    <select id="countByAction" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM audit_log
+        WHERE action = #{action}
+        <if test="startTime != null">
+            AND created_at &gt;= #{startTime}
+        </if>
+    </select>
+
+    <!-- 按操作类型分组统计 -->
+    <select id="countGroupByAction" resultType="java.util.Map">
+        SELECT action, COUNT(*) AS cnt
+        FROM audit_log
+        <where>
+            <if test="startTime != null">
+                AND created_at &gt;= #{startTime}
+            </if>
+            <if test="endTime != null">
+                AND created_at &lt;= #{endTime}
+            </if>
+        </where>
+        GROUP BY action
+    </select>
+
+</mapper>

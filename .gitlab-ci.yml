@@ -1,0 +1,429 @@
+# =============================================================================
+# 红方文件汇聚平台 - GitLab CI/CD 流水线
+# 阶段: checkout -> lint -> build -> test -> security -> package -> deploy -> verify
+# 门禁: JaCoCo 覆盖率 >= 80%, SonarQube Quality Gate, 安全扫描
+# =============================================================================
+stages:
+  - checkout
+  - lint
+  - build
+  - test
+  - security
+  - package
+  - deploy
+  - verify
+
+variables:
+  # ---- 镜像仓库 ----
+  REGISTRY: "registry.example.com"
+  REGISTRY_NAMESPACE: "redteam"
+  # ---- Maven ----
+  MAVEN_OPTS: "-Dmaven.repo.local=$CI_PROJECT_DIR/.m2/repository -Dorg.slf4j.simpleLogger.log.org.apache.maven.cli.transfer.Slf4jMavenTransferListener=warn"
+  MAVEN_CLI_OPTS: "--batch-mode --errors --fail-at-end --show-version -DinstallAtEnd=true -DdeployAtEnd=true"
+  # ---- 覆盖率门禁 ----
+  JACOCO_MIN_COVERAGE: "0.80"
+  # ---- SonarQube ----
+  SONAR_PROJECT_KEY: "redteam-platform"
+  # ---- 后端服务列表 ----
+  BACKEND_SERVICES: "auth-service upload-service parse-service search-service analyze-service profile-service task-service notification-service report-service feishu-service"
+  # ---- K8s ----
+  K8S_NAMESPACE: "redteam-platform"
+  # 缓存
+  GIT_DEPTH: "20"
+
+# ---- 全局缓存 (Maven 依赖) ----
+cache:
+  key:
+    files:
+      - backend/pom.xml
+      - frontend/package-lock.json
+  paths:
+    - backend/.m2/repository
+    - frontend/node_modules
+  policy: pull-push
+
+# =============================================================================
+# 默认行为: 只有 main / develop / feature-* / release-* 分支 和 MR 触发
+# =============================================================================
+workflow:
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+    - if: '$CI_COMMIT_BRANCH =~ /^(main|develop|release\/.*)$/'
+    - if: '$CI_COMMIT_BRANCH =~ /^feature\/.*$/'
+    - if: '$CI_COMMIT_TAG =~ /^v\d+\.\d+\.\d+/'
+    - when: never
+
+# =============================================================================
+# Stage: checkout (准备环境, 检出)
+# =============================================================================
+checkout:verify:
+  stage: checkout
+  image: alpine:3.18
+  script:
+    - echo "Pipeline started on branch=$CI_COMMIT_BRANCH tag=$CI_COMMIT_TAG"
+    - echo "Commit SHA: $CI_COMMIT_SHA"
+    - echo "Triggered by: $GITLAB_USER_NAME"
+    - env | grep -E '^(CI_|GITLAB_)' | sort
+  rules:
+    - when: always
+  artifacts:
+    reports:
+      dotenv: build-env.env
+  after_script:
+    - echo "BUILD_IMAGE_TAG=${CI_COMMIT_SHORT_SHA}" > build-env.env
+    - echo "BUILD_TIMESTAMP=$(date -u +%Y%m%dT%H%M%SZ)" >> build-env.env
+
+# =============================================================================
+# Stage: lint - 代码规范检查
+# =============================================================================
+lint:backend:
+  stage: lint
+  image: maven:3.9-eclipse-temurin-17
+  needs: ["checkout:verify"]
+  script:
+    - cd backend
+    - mvn $MAVEN_CLI_OPTS checkstyle:check spotbugs:check -DskipTests=true
+  allow_failure: false
+  rules:
+    - changes:
+        - backend/**/*
+        - .gitlab-ci.yml
+
+lint:frontend:
+  stage: lint
+  image: node:20-alpine
+  needs: ["checkout:verify"]
+  script:
+    - cd frontend
+    - npm ci --cache .npm --prefer-offline
+    - npm run lint
+    - npx prettier --check "src/**/*.{ts,tsx,js,jsx,json,css,md}"
+  allow_failure: false
+  rules:
+    - changes:
+        - frontend/**/*
+        - .gitlab-ci.yml
+
+# =============================================================================
+# Stage: build - 编译构建
+# =============================================================================
+build:backend:
+  stage: build
+  image: maven:3.9-eclipse-temurin-17
+  needs: ["lint:backend"]
+  script:
+    - cd backend
+    - mvn $MAVEN_CLI_OPTS clean compile -DskipTests=true
+  artifacts:
+    paths:
+      - backend/**/target/classes
+    expire_in: 1 hour
+  rules:
+    - changes:
+        - backend/**/*
+
+build:frontend:
+  stage: build
+  image: node:20-alpine
+  needs: ["lint:frontend"]
+  script:
+    - cd frontend
+    - npm ci --cache .npm --prefer-offline
+    - npm run build -- --mode production
+  artifacts:
+    paths:
+      - frontend/dist
+    expire_in: 1 hour
+  rules:
+    - changes:
+        - frontend/**/*
+
+# =============================================================================
+# Stage: test - 单元测试 + 覆盖率 (门禁 80%)
+# =============================================================================
+test:backend:
+  stage: test
+  image: maven:3.9-eclipse-temurin-17
+  needs: ["build:backend"]
+  script:
+    - cd backend
+    # 执行测试 + JaCoCo 覆盖率
+    - mvn $MAVEN_CLI_OPTS test jacoco:report
+    # 提取覆盖率数值
+    - |
+      COVERAGE=$(mvn $MAVEN_CLI_OPTS jacoco:report | grep -oP 'Total.*?([0-9]+)%' | tail -1 | grep -oP '[0-9]+')
+      echo "Code coverage: ${COVERAGE}%"
+    # 覆盖率门禁检查 (>= 80%)
+    - |
+      MIN=$(echo "$JACOCO_MIN_COVERAGE * 100" | bc | cut -d. -f1)
+      if [ -z "$COVERAGE" ] || [ "$COVERAGE" -lt "$MIN" ]; then
+        echo "ERROR: Coverage ${COVERAGE}% < required ${MIN}%"
+        exit 1
+      fi
+      echo "Coverage gate passed."
+  artifacts:
+    when: always
+    paths:
+      - backend/**/target/site/jacoco
+      - backend/**/target/surefire-reports
+    reports:
+      junit:
+        - backend/**/target/surefire-reports/TEST-*.xml
+    expire_in: 7 days
+  coverage: '/Code coverage:\s*(\d+)%/'
+  rules:
+    - changes:
+        - backend/**/*
+
+test:frontend:
+  stage: test
+  image: node:20-alpine
+  needs: ["build:frontend"]
+  script:
+    - cd frontend
+    - npm run test -- --coverage --watchAll=false --passWithNoTests
+  artifacts:
+    when: always
+    paths:
+      - frontend/coverage
+    reports:
+      junit:
+        - frontend/junit.xml
+    expire_in: 7 days
+  rules:
+    - changes:
+        - frontend/**/*
+
+# SonarQube 静态分析
+sonarqube:check:
+  stage: test
+  image: maven:3.9-eclipse-temurin-17
+  needs: ["test:backend"]
+  variables:
+    SONAR_USER_HOME: "$CI_PROJECT_DIR/.sonar"
+    GIT_DEPTH: "0"
+  cache:
+    key: "${CI_JOB_NAME}"
+    paths:
+      - .sonar/cache
+  script:
+    - cd backend
+    - |
+      mvn $MAVEN_CLI_OPTS verify sonar:sonar \
+        -Dsonar.projectKey=$SONAR_PROJECT_KEY \
+        -Dsonar.projectName="redteam-platform" \
+        -Dsonar.host.url=$SONAR_HOST_URL \
+        -Dsonar.login=$SONAR_TOKEN \
+        -Dsonar.qualitygate.wait=true \
+        -Dsonar.coverage.jacoco.xmlReportPaths=**/target/site/jacoco/jacoco.xml
+  allow_failure: false
+  rules:
+    - if: '$CI_PIPELINE_SOURCE == "merge_request_event"'
+      changes:
+        - backend/**/*
+    - if: '$CI_COMMIT_BRANCH == "main"'
+
+# =============================================================================
+# Stage: security - 安全扫描
+# =============================================================================
+security:dependency-scan:
+  stage: security
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  needs: ["build:backend", "build:frontend"]
+  script:
+    # 后端依赖扫描
+    - trivy fs --exit-code 1 --severity HIGH,CRITICAL --no-progress backend/
+    # 前端依赖扫描
+    - trivy fs --exit-code 1 --severity HIGH,CRITICAL --no-progress frontend/
+  allow_failure: false
+  artifacts:
+    when: always
+    reports:
+      dependency_scanning:
+        - trivy-report.json
+  rules:
+    - when: on_success
+
+security:sast:
+  stage: security
+  image: returntocorp/semgrep:latest
+  needs: ["build:backend", "build:frontend"]
+  script:
+    - semgrep ci --config=p/default --config=p/java --config=p/javascript --config=p/owasp-top-ten --json -o semgrep-report.json
+  allow_failure: false
+  artifacts:
+    when: always
+    paths:
+      - semgrep-report.json
+  rules:
+    - when: on_success
+
+security:secret-detect:
+  stage: security
+  image: zricethezav/gitleaks:latest
+  needs: ["checkout:verify"]
+  script:
+    - gitleaks detect --source . --verbose --report-format json --report-path gitleaks-report.json
+  allow_failure: false
+  artifacts:
+    when: always
+    paths:
+      - gitleaks-report.json
+  rules:
+    - when: on_success
+
+# =============================================================================
+# Stage: package - Docker 镜像构建推送
+# =============================================================================
+.package:template: &package_template
+  stage: package
+  image: docker:24-cli
+  services:
+    - docker:24-dind
+  needs: ["test:backend", "security:dependency-scan", "security:sast"]
+  before_script:
+    - echo "$REGISTRY_PASSWORD" | docker login -u "$REGISTRY_USER" --password-stdin "$REGISTRY"
+    - export IMAGE_TAG="${CI_COMMIT_TAG:-${CI_COMMIT_SHORT_SHA}}"
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(main|develop)$/ || $CI_COMMIT_TAG'
+      when: on_success
+    - when: never
+
+package:backend:auth-service:
+  <<: *package_template
+  script:
+    - docker build -t $REGISTRY/$REGISTRY_NAMESPACE/auth-service:$IMAGE_TAG -f backend/auth-service/Dockerfile backend/auth-service
+    - docker tag $REGISTRY/$REGISTRY_NAMESPACE/auth-service:$IMAGE_TAG $REGISTRY/$REGISTRY_NAMESPACE/auth-service:latest
+    - docker push $REGISTRY/$REGISTRY_NAMESPACE/auth-service:$IMAGE_TAG
+    - docker push $REGISTRY/$REGISTRY_NAMESPACE/auth-service:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(main|develop)$/ || $CI_COMMIT_TAG'
+      changes:
+        - backend/auth-service/**/*
+
+package:frontend:
+  <<: *package_template
+  script:
+    - docker build -t $REGISTRY/$REGISTRY_NAMESPACE/frontend:$IMAGE_TAG -f frontend/Dockerfile frontend
+    - docker tag $REGISTRY/$REGISTRY_NAMESPACE/frontend:$IMAGE_TAG $REGISTRY/$REGISTRY_NAMESPACE/frontend:latest
+    - docker push $REGISTRY/$REGISTRY_NAMESPACE/frontend:$IMAGE_TAG
+    - docker push $REGISTRY/$REGISTRY_NAMESPACE/frontend:latest
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(main|develop)$/ || $CI_COMMIT_TAG'
+      changes:
+        - frontend/**/*
+
+# 镜像漏洞扫描 (推送到仓库后)
+security:image-scan:
+  stage: package
+  image:
+    name: aquasec/trivy:latest
+    entrypoint: [""]
+  needs: ["package:frontend", "package:backend:auth-service"]
+  script:
+    - trivy image --exit-code 1 --severity HIGH,CRITICAL --no-progress $REGISTRY/$REGISTRY_NAMESPACE/frontend:${CI_COMMIT_SHORT_SHA}
+  allow_failure: false
+  rules:
+    - if: '$CI_COMMIT_BRANCH =~ /^(main|develop)$/ || $CI_COMMIT_TAG'
+
+# =============================================================================
+# Stage: deploy - K8s 滚动部署
+# =============================================================================
+.deploy:template: &deploy_template
+  stage: deploy
+  image: bitnami/kubectl:1.28
+  needs: ["security:image-scan"]
+  variables:
+    KUBE_CONFIG: $KUBE_CONFIG_PROD
+  before_script:
+    - mkdir -p $HOME/.kube
+    - echo "$KUBE_CONFIG" | base64 -d > $HOME/.kube/config
+    - kubectl version --client
+  environment:
+    name: production
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_TAG'
+      when: manual
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+      when: on_success
+    - when: never
+
+deploy:staging:
+  <<: *deploy_template
+  environment:
+    name: staging
+  script:
+    - export IMAGE_TAG="${CI_COMMIT_TAG:-${CI_COMMIT_SHORT_SHA}}"
+    - kubectl set image deployment/auth-service auth-service=$REGISTRY/$REGISTRY_NAMESPACE/auth-service:$IMAGE_TAG -n $K8S_NAMESPACE
+    - kubectl set image deployment/frontend frontend=$REGISTRY/$REGISTRY_NAMESPACE/frontend:$IMAGE_TAG -n $K8S_NAMESPACE
+    - kubectl rollout status deployment/auth-service -n $K8S_NAMESPACE --timeout=300s
+    - kubectl rollout status deployment/frontend -n $K8S_NAMESPACE --timeout=300s
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "develop"'
+
+deploy:production:
+  <<: *deploy_template
+  environment:
+    name: production
+  script:
+    - export IMAGE_TAG="${CI_COMMIT_TAG:-${CI_COMMIT_SHORT_SHA}}"
+    # 金丝雀: 先部署 v2 副本, 切 10% 流量
+    - kubectl set image deployment/auth-service auth-service=$REGISTRY/$REGISTRY_NAMESPACE/auth-service:$IMAGE_TAG -n $K8S_NAMESPACE
+    - kubectl set image deployment/frontend frontend=$REGISTRY/$REGISTRY_NAMESPACE/frontend:$IMAGE_TAG -n $K8S_NAMESPACE
+    # 滚动状态等待
+    - kubectl rollout status deployment/auth-service -n $K8S_NAMESPACE --timeout=600s
+    - kubectl rollout status deployment/frontend -n $K8S_NAMESPACE --timeout=600s
+    # 记录部署版本 (用于回滚)
+    - echo "Deployed version: $IMAGE_TAG at $(date)" > deploy-history.txt
+  artifacts:
+    paths:
+      - deploy-history.txt
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_TAG'
+      when: manual
+
+# =============================================================================
+# Stage: verify - 部署后验证 + 失败回滚
+# =============================================================================
+verify:health-check:
+  stage: verify
+  image: curlimages/curl:8.5.0
+  needs: ["deploy:production"]
+  script:
+    # 健康检查 (持续 5 分钟)
+    - |
+      URL="https://redteam.example.com/healthz"
+      for i in $(seq 1 30); do
+        HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" --max-time 5 "$URL" || echo "000")
+        echo "Attempt $i: HTTP $HTTP_CODE"
+        if [ "$HTTP_CODE" = "200" ]; then
+          echo "Health check passed."
+          exit 0
+        fi
+        sleep 10
+      done
+      echo "Health check failed after 5 minutes."
+      exit 1
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_TAG'
+      when: on_success
+
+verify:rollback:
+  stage: verify
+  image: bitnami/kubectl:1.28
+  needs: ["deploy:production"]
+  before_script:
+    - mkdir -p $HOME/.kube
+    - echo "$KUBE_CONFIG_PROD" | base64 -d > $HOME/.kube/config
+  script:
+    - echo "Rolling back due to verification failure..."
+    - kubectl rollout undo deployment/auth-service -n $K8S_NAMESPACE
+    - kubectl rollout undo deployment/frontend -n $K8S_NAMESPACE
+    - kubectl rollout status deployment/auth-service -n $K8S_NAMESPACE --timeout=300s
+    - kubectl rollout status deployment/frontend -n $K8S_NAMESPACE --timeout=300s
+    - echo "Rollback completed."
+  rules:
+    - if: '$CI_COMMIT_BRANCH == "main" || $CI_COMMIT_TAG'
+      when: on_failure

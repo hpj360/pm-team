@@ -1,0 +1,512 @@
+openapi: 3.0.3
+info:
+  title: 红方文件汇聚平台 - 报告服务 API
+  description: |
+    报告服务，提供报告生成、模板管理、导出（PDF/Word/HTML）能力。
+
+    - 服务端口：8092
+    - API 前缀：/api/v1
+    - 认证方式：Bearer JWT
+    - 限流策略：500 QPS / 租户
+    - 模板引擎：Freemarker
+  version: 1.0.0
+  contact:
+    name: 红方团队
+    email: redteam@example.com
+
+servers:
+  - url: http://localhost:8092
+    description: 本地开发环境
+  - url: https://api.redteam.internal/report
+    description: 生产环境
+
+tags:
+  - name: 报告管理
+    description: 报告生成、查询、下载
+  - name: 报告模板
+    description: 模板查询
+
+paths:
+  /api/v1/reports/generate:
+    post:
+      tags: [报告管理]
+      summary: 生成报告
+      description: |
+        异步触发报告生成任务，根据模板和数据源生成 PDF/Word/HTML 报告。
+        返回任务 ID 后可通过 /reports/{reportId} 查询生成状态。
+      operationId: generateReport
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReportGenerateRequest'
+      responses:
+        '200':
+          description: 生成任务已创建
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          report_id:
+                            type: string
+                            description: 报告 ID
+                          status:
+                            type: string
+                            enum: [PENDING, GENERATING, SUCCESS, FAILED]
+                          estimated_duration_ms:
+                            type: integer
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          description: 模板不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+              example:
+                code: 90002
+                message: 报告模板不存在
+                data: null
+                timestamp: 1785086825000
+
+  /api/v1/reports:
+    get:
+      tags: [报告管理]
+      summary: 报告列表
+      operationId: listReports
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - name: templateCode
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [PENDING, GENERATING, SUCCESS, FAILED]
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [PDF, WORD, HTML]
+        - name: creatorId
+          in: query
+          schema:
+            type: string
+        - name: targetId
+          in: query
+          schema:
+            type: string
+        - name: startTime
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: endTime
+          in: query
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportPageResult'
+
+  /api/v1/reports/{reportId}:
+    get:
+      tags: [报告管理]
+      summary: 报告详情
+      operationId: getReport
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReportIdPath'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReportResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [报告管理]
+      summary: 删除报告
+      operationId: deleteReport
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReportIdPath'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+
+  /api/v1/reports/{reportId}/download:
+    get:
+      tags: [报告管理]
+      summary: 下载报告
+      description: 返回报告文件下载 URL（带签名）。
+      operationId: downloadReport
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/ReportIdPath'
+        - name: format
+          in: query
+          description: 下载格式（需与生成时一致或模板支持多格式）
+          schema:
+            type: string
+            enum: [PDF, WORD, HTML]
+            default: PDF
+      responses:
+        '200':
+          description: 下载成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          download_url:
+                            type: string
+                            description: 签名下载 URL
+                          file_name:
+                            type: string
+                          format:
+                            type: string
+                          size:
+                            type: integer
+                            format: int64
+                          expire_in:
+                            type: integer
+                            description: URL 有效期（秒）
+                            example: 900
+        '404':
+          $ref: '#/components/responses/NotFound'
+        '409':
+          description: 报告尚未生成完成
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+
+  /api/v1/reports/templates:
+    get:
+      tags: [报告模板]
+      summary: 模板列表
+      description: 查询可用报告模板。
+      operationId: listReportTemplates
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [TASK_SUMMARY, TARGET_PROFILE, THREAT_INTEL, INCIDENT, CUSTOM]
+        - name: enabled
+          in: query
+          schema:
+            type: boolean
+            default: true
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/ReportTemplate'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    SizeParam:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    ReportIdPath:
+      name: reportId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: 参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+    NotFound:
+      description: 报告不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+
+  schemas:
+    ApiResult:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          nullable: true
+        timestamp:
+          type: integer
+          format: int64
+      required: [code, message, timestamp]
+
+    PageData:
+      type: object
+      properties:
+        records:
+          type: array
+          items: {}
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        size:
+          type: integer
+      required: [records, total, page, size]
+
+    ReportGenerateRequest:
+      type: object
+      description: 报告生成请求
+      properties:
+        template_code:
+          type: string
+          description: 模板编码
+          example: TASK_SUMMARY
+        title:
+          type: string
+          description: 报告标题
+        format:
+          type: string
+          enum: [PDF, WORD, HTML]
+          default: PDF
+        data_sources:
+          type: object
+          description: 数据源配置
+          properties:
+            target_ids:
+              type: array
+              items:
+                type: string
+            file_ids:
+              type: array
+              items:
+                type: string
+            task_ids:
+              type: array
+              items:
+                type: string
+            start_time:
+              type: integer
+              format: int64
+            end_time:
+              type: integer
+              format: int64
+        parameters:
+          type: object
+          description: 模板参数（key-value）
+          additionalProperties: true
+        watermarks:
+          type: array
+          description: 水印（如"机密"、"内部使用"）
+          items:
+            type: string
+        sign_enabled:
+          type: boolean
+          description: 是否启用数字签名（SM2）
+          default: false
+        notify_on_complete:
+          type: boolean
+          description: 生成完成后是否通知
+          default: true
+      required: [template_code, title]
+
+    Report:
+      type: object
+      description: 报告实体
+      properties:
+        report_id:
+          type: string
+        title:
+          type: string
+        template_code:
+          type: string
+        template_name:
+          type: string
+        category:
+          type: string
+          enum: [TASK_SUMMARY, TARGET_PROFILE, THREAT_INTEL, INCIDENT, CUSTOM]
+        format:
+          type: string
+          enum: [PDF, WORD, HTML]
+        status:
+          type: string
+          enum: [PENDING, GENERATING, SUCCESS, FAILED]
+        file_url:
+          type: string
+          description: 生成完成后的文件 URL
+        file_size:
+          type: integer
+          format: int64
+        file_name:
+          type: string
+        watermarks:
+          type: array
+          items:
+            type: string
+        sign_enabled:
+          type: boolean
+        sign_value:
+          type: string
+          description: 数字签名值
+        data_sources:
+          type: object
+        parameters:
+          type: object
+        target_id:
+          type: string
+        creator_id:
+          type: string
+        creator_name:
+          type: string
+        tenant_id:
+          type: string
+        error_message:
+          type: string
+        generated_at:
+          type: integer
+          format: int64
+        duration_ms:
+          type: integer
+        created_at:
+          type: integer
+          format: int64
+
+    ReportResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Report'
+
+    ReportPageResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/PageData'
+                - type: object
+                  properties:
+                    records:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Report'
+
+    ReportTemplate:
+      type: object
+      description: 报告模板
+      properties:
+        template_id:
+          type: string
+        template_code:
+          type: string
+          description: 模板编码（唯一）
+          example: TASK_SUMMARY
+        template_name:
+          type: string
+          description: 模板名称
+          example: 任务总结报告
+        category:
+          type: string
+          enum: [TASK_SUMMARY, TARGET_PROFILE, THREAT_INTEL, INCIDENT, CUSTOM]
+        description:
+          type: string
+        supported_formats:
+          type: array
+          items:
+            type: string
+            enum: [PDF, WORD, HTML]
+        parameters_schema:
+          type: object
+          description: 模板参数 JSON Schema
+          additionalProperties: true
+        required_data_sources:
+          type: array
+          description: 必需数据源类型
+          items:
+            type: string
+            enum: [target_ids, file_ids, task_ids, start_time, end_time]
+        preview_url:
+          type: string
+          description: 模板预览图 URL
+        enabled:
+          type: boolean
+        version:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+        updated_at:
+          type: integer
+          format: int64

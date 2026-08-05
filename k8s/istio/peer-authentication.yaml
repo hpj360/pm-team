@@ -1,0 +1,66 @@
+---
+# =============================================================================
+# Istio PeerAuthentication - 服务间 mTLS
+# =============================================================================
+apiVersion: security.istio.io/v1beta1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: redteam-platform
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+spec:
+  mtls:
+    mode: STRICT
+---
+# =============================================================================
+# Istio AuthorizationPolicy - 授权策略 (零信任)
+# 默认: 允许命名空间内服务互相访问; 拒绝外部直接访问内部服务
+# =============================================================================
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: deny-all-default
+  namespace: redteam-platform
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+spec: {}
+# 空 spec = deny all (需要在末尾追加 allow 规则)
+---
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-namespace-internal
+  namespace: redteam-platform
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+spec:
+  action: ALLOW
+  rules:
+    # 允许同一命名空间内服务互访
+    - from:
+        - source:
+            namespaces: ["redteam-platform"]
+    # 允许 istio-system 网关访问
+    - from:
+        - source:
+            namespaces: ["istio-system"]
+---
+# 仅允许 GET /actuator/prometheus 从监控命名空间访问
+apiVersion: security.istio.io/v1beta1
+kind: AuthorizationPolicy
+metadata:
+  name: allow-prometheus-scrape
+  namespace: redteam-platform
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+spec:
+  action: ALLOW
+  rules:
+    - from:
+        - source:
+            namespaces: ["redteam-monitoring", "istio-system"]
+      to:
+        - operation:
+            methods: ["GET"]
+            paths: ["/actuator/prometheus", "/actuator/health*", "/metrics"]

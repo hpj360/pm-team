@@ -1,6 +1,7 @@
 package com.redteam.upload.controller;
 
 import com.redteam.common.api.dto.FileInfoDTO;
+import com.redteam.common.annotation.RateLimit;
 import com.redteam.common.result.Result;
 import com.redteam.upload.service.FileService;
 import io.swagger.v3.oas.annotations.Operation;
@@ -39,6 +40,7 @@ public class FileUploadController {
      */
     @PostMapping("/upload")
     @Operation(summary = "上传文件", description = "上传单个文件到平台")
+    @RateLimit(qps = 5, limitType = "USER")
     public Result<FileInfoDTO> upload(
             @Parameter(description = "文件") @RequestParam("file") MultipartFile file,
             @Parameter(description = "目标ID") @RequestParam(value = "targetId", required = false) Long targetId,

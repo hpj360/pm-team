@@ -66,7 +66,7 @@ const mockTasks: AnalyzeTask[] = [
 ];
 
 const FileAnalyze: React.FC = () => {
-  const [tasks, setTasks] = useState<AnalyzeTask[]>(mockTasks);
+  const [tasks] = useState<AnalyzeTask[]>(mockTasks);
   const [selectedTask, setSelectedTask] = useState<AnalyzeTask | null>(null);
   const [detailVisible, setDetailVisible] = useState(false);
 

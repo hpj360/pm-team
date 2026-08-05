@@ -37,6 +37,15 @@ public interface FileAnalyzeService {
     AnalyzeResultDTO getAnalyzeResult(Long taskId);
 
     /**
+     * 处理异步分析任务（由事件监听器触发）
+     *
+     * <p>加载任务、执行分析、持久化结果、发送完成/失败事件。</p>
+     *
+     * @param taskId 任务ID
+     */
+    void processAnalyzeTask(Long taskId);
+
+    /**
      * 提取敏感信息
      *
      * @param text 文本内容

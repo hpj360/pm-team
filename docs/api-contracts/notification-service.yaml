@@ -1,0 +1,437 @@
+openapi: 3.0.3
+info:
+  title: 红方文件汇聚平台 - 通知服务 API
+  description: |
+    通知服务，提供站内信、邮件、飞书、短信多通道通知能力。
+
+    - 服务端口：8091
+    - API 前缀：/api/v1
+    - 认证方式：Bearer JWT
+    - 限流策略：500 QPS / 租户
+    - 通道：IN_APP / EMAIL / SMS / FEISHU / WEBHOOK
+  version: 1.0.0
+  contact:
+    name: 红方团队
+    email: redteam@example.com
+
+servers:
+  - url: http://localhost:8091
+    description: 本地开发环境
+  - url: https://api.redteam.internal/notification
+    description: 生产环境
+
+tags:
+  - name: 通知发送
+    description: 主动发送通知
+  - name: 通知查询
+    description: 通知列表、详情
+  - name: 通知状态
+    description: 标记已读、未读数
+
+paths:
+  /api/v1/notifications/send:
+    post:
+      tags: [通知发送]
+      summary: 发送通知
+      description: |
+        发送通知，支持多通道、多接收人。
+        接收人可通过 recipient_ids 指定用户，或通过 role_codes 按角色广播。
+      operationId: sendNotification
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/NotificationSendRequest'
+      responses:
+        '200':
+          description: 发送成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          notification_id:
+                            type: string
+                          success:
+                            type: boolean
+                          channel_results:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                channel:
+                                  type: string
+                                status:
+                                  type: string
+                                message_id:
+                                  type: string
+        '400':
+          $ref: '#/components/responses/BadRequest'
+
+  /api/v1/notifications:
+    get:
+      tags: [通知查询]
+      summary: 当前用户通知列表
+      description: 分页查询当前登录用户的通知。
+      operationId: listNotifications
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - name: channel
+          in: query
+          schema:
+            type: string
+            enum: [IN_APP, EMAIL, SMS, FEISHU, WEBHOOK]
+        - name: category
+          in: query
+          schema:
+            type: string
+            enum: [TASK, FILE, SYSTEM, SECURITY]
+        - name: level
+          in: query
+          schema:
+            type: string
+            enum: [INFO, WARN, ERROR, CRITICAL]
+        - name: isRead
+          in: query
+          schema:
+            type: boolean
+        - name: startTime
+          in: query
+          schema:
+            type: integer
+            format: int64
+        - name: endTime
+          in: query
+          schema:
+            type: integer
+            format: int64
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationPageResult'
+
+  /api/v1/notifications/{notificationId}:
+    get:
+      tags: [通知查询]
+      summary: 通知详情
+      operationId: getNotification
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/NotificationIdPath'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/NotificationResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [通知查询]
+      summary: 删除通知
+      operationId: deleteNotification
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/NotificationIdPath'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+
+  /api/v1/notifications/{notificationId}/read:
+    put:
+      tags: [通知状态]
+      summary: 标记单条已读
+      operationId: markRead
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/NotificationIdPath'
+      responses:
+        '200':
+          description: 标记成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+
+  /api/v1/notifications/read-all:
+    put:
+      tags: [通知状态]
+      summary: 全部标记已读
+      operationId: markAllRead
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 标记成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          updated_count:
+                            type: integer
+                            description: 标记已读条数
+
+  /api/v1/notifications/unread-count:
+    get:
+      tags: [通知状态]
+      summary: 未读数量
+      description: 返回当前用户各通道未读数量。
+      operationId: unreadCount
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          total:
+                            type: integer
+                            description: 未读总数
+                          channels:
+                            type: object
+                            additionalProperties:
+                              type: integer
+                            description: 各通道未读数
+                            example:
+                              IN_APP: 5
+                              EMAIL: 2
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    SizeParam:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    NotificationIdPath:
+      name: notificationId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: 参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+    NotFound:
+      description: 通知不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+
+  schemas:
+    ApiResult:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          nullable: true
+        timestamp:
+          type: integer
+          format: int64
+      required: [code, message, timestamp]
+
+    PageData:
+      type: object
+      properties:
+        records:
+          type: array
+          items: {}
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        size:
+          type: integer
+      required: [records, total, page, size]
+
+    NotificationSendRequest:
+      type: object
+      description: 通知发送请求
+      properties:
+        recipient_ids:
+          type: array
+          items:
+            type: string
+          description: 接收人用户 ID 列表
+        role_codes:
+          type: array
+          items:
+            type: string
+          description: 接收角色编码列表（按角色广播）
+        channels:
+          type: array
+          items:
+            type: string
+            enum: [IN_APP, EMAIL, SMS, FEISHU, WEBHOOK]
+          default: [IN_APP]
+        template_code:
+          type: string
+          description: 通知模板编码
+        template_params:
+          type: object
+          additionalProperties:
+            type: string
+          description: 模板参数
+        title:
+          type: string
+          description: 通知标题（无模板时使用）
+        body:
+          type: string
+          description: 通知正文（支持 Markdown）
+        level:
+          type: string
+          enum: [INFO, WARN, ERROR, CRITICAL]
+          default: INFO
+        category:
+          type: string
+          enum: [TASK, FILE, SYSTEM, SECURITY]
+        action_url:
+          type: string
+          description: 跳转链接
+        ref_type:
+          type: string
+          description: 关联资源类型
+        ref_id:
+          type: string
+          description: 关联资源 ID
+      required: [channels]
+
+    Notification:
+      type: object
+      description: 通知实体
+      properties:
+        notification_id:
+          type: string
+        recipient_id:
+          type: string
+          description: 接收人用户 ID
+        recipient_name:
+          type: string
+        sender_id:
+          type: string
+          description: 发送人用户 ID（系统通知为 SYSTEM）
+        sender_name:
+          type: string
+        channel:
+          type: string
+          enum: [IN_APP, EMAIL, SMS, FEISHU, WEBHOOK]
+        category:
+          type: string
+          enum: [TASK, FILE, SYSTEM, SECURITY]
+        level:
+          type: string
+          enum: [INFO, WARN, ERROR, CRITICAL]
+        title:
+          type: string
+        body:
+          type: string
+        action_url:
+          type: string
+        ref_type:
+          type: string
+        ref_id:
+          type: string
+        is_read:
+          type: boolean
+          description: 是否已读
+        read_at:
+          type: integer
+          format: int64
+          description: 已读时间
+        status:
+          type: string
+          enum: [PENDING, SENDING, SENT, DELIVERED, READ, FAILED]
+        sent_at:
+          type: integer
+          format: int64
+        delivered_at:
+          type: integer
+          format: int64
+        created_at:
+          type: integer
+          format: int64
+
+    NotificationResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Notification'
+
+    NotificationPageResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/PageData'
+                - type: object
+                  properties:
+                    records:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Notification'

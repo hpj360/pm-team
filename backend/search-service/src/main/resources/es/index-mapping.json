@@ -1,0 +1,42 @@
+{
+  "settings": {
+    "number_of_shards": 3,
+    "number_of_replicas": 1,
+    "analysis": {
+      "analyzer": {
+        "ik_smart_analyzer": { "type": "custom", "tokenizer": "ik_smart" },
+        "ik_max_word_analyzer": { "type": "custom", "tokenizer": "ik_max_word" }
+      }
+    }
+  },
+  "mappings": {
+    "properties": {
+      "fileId": { "type": "long" },
+      "fileName": { "type": "text", "analyzer": "ik_max_word", "search_analyzer": "ik_smart" },
+      "fileType": { "type": "keyword" },
+      "fileSize": { "type": "long" },
+      "fileSm3": { "type": "keyword" },
+      "textContent": { "type": "text", "analyzer": "ik_max_word", "search_analyzer": "ik_smart" },
+      "targetId": { "type": "long" },
+      "tags": { "type": "keyword" },
+      "sensitiveLevel": { "type": "integer" },
+      "isPublic": { "type": "integer" },
+      "nerEntities": {
+        "type": "nested",
+        "properties": {
+          "entityText": { "type": "keyword" },
+          "entityType": { "type": "keyword" }
+        }
+      },
+      "yaraMatches": {
+        "type": "nested",
+        "properties": {
+          "ruleName": { "type": "keyword" },
+          "severity": { "type": "keyword" }
+        }
+      },
+      "uploadTime": { "type": "date" },
+      "createTime": { "type": "date" }
+    }
+  }
+}

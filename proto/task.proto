@@ -1,0 +1,196 @@
+syntax = "proto3";
+
+package redteam.task;
+
+import "common.proto";
+
+option java_package = "com.redteam.task.grpc";
+option java_multiple_files = true;
+option go_package = "redteam/task;taskpb";
+
+// ============================================================================
+// 任务服务 gRPC 定义
+// 提供跨服务的任务查询、状态流转、时间线查询能力
+// 服务端口：gRPC 9090（与 task-service REST 8090 同进程）
+// ============================================================================
+
+service TaskService {
+  // 根据 taskId 获取任务详情
+  rpc GetTask(GetTaskRequest) returns (Task);
+
+  // 根据业务关联 ID 查询任务（如关联文件 ID、目标 ID）
+  rpc GetTasksByRef(GetTasksByRefRequest) returns (TaskList);
+
+  // 更新任务状态（状态机流转）
+  rpc UpdateTaskStatus(UpdateTaskStatusRequest) returns (redteam.common.Result);
+
+  // 创建任务
+  rpc CreateTask(CreateTaskRequest) returns (Task);
+
+  // 获取任务时间线
+  rpc GetTaskTimeline(GetTaskTimelineRequest) returns (TaskTimeline);
+
+  // 健康检查
+  rpc Health(redteam.common.HealthCheckRequest) returns (redteam.common.HealthCheckResponse);
+}
+
+// ============================================================================
+// 任务信息
+// ============================================================================
+
+message GetTaskRequest {
+  // 任务 ID
+  string task_id = 1;
+  // 请求上下文
+  redteam.common.RequestContext context = 2;
+}
+
+message GetTasksByRefRequest {
+  // 关联类型：FILE / TARGET / USER / REPORT
+  string ref_type = 1;
+  // 关联 ID
+  string ref_id = 2;
+  // 任务类型（可选过滤）
+  string task_type = 3;
+  // 请求上下文
+  redteam.common.RequestContext context = 4;
+}
+
+message TaskList {
+  // 任务列表
+  repeated Task tasks = 1;
+  // 总数
+  int32 total = 2;
+}
+
+// 任务实体
+message Task {
+  // 任务 ID
+  string task_id = 1;
+  // 任务名称
+  string name = 2;
+  // 任务类型：PARSE / ANALYZE / PROFILE / REPORT / SANDBOX / CUSTOM
+  string task_type = 3;
+  // 任务状态：PENDING / RUNNING / PAUSED / COMPLETED / FAILED / CANCELLED
+  string status = 4;
+  // 任务优先级：LOW / NORMAL / HIGH / URGENT
+  string priority = 5;
+  // 关联资源（如 file_id、target_id）
+  repeated TaskRef refs = 6;
+  // 输入参数（JSON）
+  string input = 7;
+  // 输出结果（JSON）
+  string output = 8;
+  // 进度百分比（0-100）
+  int32 progress = 9;
+  // 错误信息（status=FAILED 时有效）
+  string error_message = 10;
+  // 重试次数
+  int32 retry_count = 11;
+  // 最大重试次数
+  int32 max_retry = 12;
+  // 创建者用户 ID
+  string creator_id = 13;
+  // 租户 ID
+  string tenant_id = 14;
+  // 计划开始时间（毫秒时间戳）
+  int64 scheduled_at = 15;
+  // 实际开始时间（毫秒时间戳）
+  int64 started_at = 16;
+  // 完成时间（毫秒时间戳）
+  int64 completed_at = 17;
+  // 创建时间（毫秒时间戳）
+  int64 created_at = 18;
+  // 更新时间（毫秒时间戳）
+  int64 updated_at = 19;
+}
+
+// 任务关联资源
+message TaskRef {
+  // 关联类型：FILE / TARGET / USER / REPORT
+  string ref_type = 1;
+  // 关联 ID
+  string ref_id = 2;
+  // 备注
+  string remark = 3;
+}
+
+// ============================================================================
+// 任务状态流转
+// ============================================================================
+
+message UpdateTaskStatusRequest {
+  // 任务 ID
+  string task_id = 1;
+  // 目标状态
+  string status = 2;
+  // 操作人用户 ID
+  string operator_id = 3;
+  // 状态变更原因
+  string reason = 4;
+  // 进度百分比（可选）
+  int32 progress = 5;
+  // 输出结果（可选，COMPLETED 时填充）
+  string output = 6;
+  // 错误信息（可选，FAILED 时填充）
+  string error_message = 7;
+}
+
+// ============================================================================
+// 任务创建
+// ============================================================================
+
+message CreateTaskRequest {
+  // 任务名称
+  string name = 1;
+  // 任务类型
+  string task_type = 2;
+  // 任务优先级
+  string priority = 3;
+  // 关联资源
+  repeated TaskRef refs = 4;
+  // 输入参数（JSON）
+  string input = 5;
+  // 计划执行时间（毫秒时间戳，0 表示立即执行）
+  int64 scheduled_at = 6;
+  // 创建者用户 ID
+  string creator_id = 7;
+  // 租户 ID
+  string tenant_id = 8;
+}
+
+// ============================================================================
+// 任务时间线
+// ============================================================================
+
+message GetTaskTimelineRequest {
+  // 任务 ID
+  string task_id = 1;
+  // 请求上下文
+  redteam.common.RequestContext context = 2;
+}
+
+message TaskTimeline {
+  // 任务 ID
+  string task_id = 1;
+  // 时间线事件列表（按时间升序）
+  repeated TimelineEvent events = 2;
+}
+
+// 时间线事件
+message TimelineEvent {
+  // 事件 ID
+  string event_id = 1;
+  // 事件类型：CREATED / STARTED / PAUSED / RESUMED / COMPLETED / FAILED / CANCELLED / PROGRESS
+  string event_type = 2;
+  // 事件描述
+  string description = 3;
+  // 操作人用户 ID
+  string operator_id = 4;
+  // 操作人用户名
+  string operator_name = 5;
+  // 事件发生时间（毫秒时间戳）
+  int64 occurred_at = 6;
+  // 事件附加数据（JSON）
+  string metadata = 7;
+}

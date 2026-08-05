@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.redteam.common.mapper.FileTagMapper">
+
+    <!-- 通用结果映射 -->
+    <resultMap id="FileTagResultMap" type="com.redteam.common.entity.FileTagEntity">
+        <id     column="id"         property="id"/>
+        <result column="file_id"    property="fileId"/>
+        <result column="tag_id"     property="tagId"/>
+        <result column="tag_code"   property="tagCode"/>
+        <result column="source"     property="source"/>
+        <result column="created_at" property="createdAt"/>
+    </resultMap>
+
+    <!-- 公共字段列 -->
+    <sql id="Base_Column_List">
+        id, file_id, tag_id, tag_code, source, created_at
+    </sql>
+
+    <!-- 按文件ID查询标签 -->
+    <select id="selectByFileId" resultMap="FileTagResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM file_tags
+        WHERE file_id = #{fileId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 按标签ID查询文件 -->
+    <select id="selectByTagId" resultMap="FileTagResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM file_tags
+        WHERE tag_id = #{tagId}
+        ORDER BY created_at DESC
+    </select>
+
+    <!-- 批量插入文件标签 -->
+    <insert id="batchInsert">
+        INSERT INTO file_tags (file_id, tag_id, tag_code, source)
+        VALUES
+        <foreach collection="list" item="item" separator=",">
+            (#{item.fileId}, #{item.tagId}, #{item.tagCode}, #{item.source})
+        </foreach>
+    </insert>
+
+    <!-- 删除文件的某个标签 -->
+    <delete id="deleteFileTag">
+        DELETE FROM file_tags
+        WHERE file_id = #{fileId}
+          AND tag_id = #{tagId}
+    </delete>
+
+    <!-- 按标签编码统计关联文件数 -->
+    <select id="countByTagCode" resultType="java.lang.Long">
+        SELECT COUNT(*)
+        FROM file_tags
+        WHERE tag_code = #{tagCode}
+    </select>
+
+</mapper>

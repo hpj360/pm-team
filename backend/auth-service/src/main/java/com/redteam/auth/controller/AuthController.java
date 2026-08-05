@@ -1,10 +1,16 @@
 package com.redteam.auth.controller;
 
+import cn.hutool.core.util.StrUtil;
 import com.redteam.auth.dto.LoginDTO;
 import com.redteam.auth.dto.LoginVO;
+import com.redteam.auth.dto.MfaSetupVO;
+import com.redteam.auth.dto.MfaVerifyDTO;
 import com.redteam.auth.dto.UserDTO;
+import com.redteam.auth.service.MfaService;
 import com.redteam.auth.service.UserService;
+import com.redteam.common.exception.BusinessException;
 import com.redteam.common.result.Result;
+import com.redteam.common.result.ResultCode;
 import com.redteam.common.util.JwtUtil;
 import com.redteam.common.util.UserContext;
 import io.swagger.v3.oas.annotations.Operation;
@@ -29,6 +35,7 @@ import org.springframework.web.bind.annotation.*;
 public class AuthController {
 
     private final UserService userService;
+    private final MfaService mfaService;
 
     /**
      * 用户登录
@@ -155,5 +162,96 @@ public class AuthController {
 
         String newToken = userService.refreshToken(token);
         return Result.success(newToken);
+    }
+
+    // ==================== MFA 多因素认证接口（v2.3 新增） ====================
+
+    /**
+     * 初始化 MFA（需登录）
+     *
+     * <p>生成 TOTP 密钥与备用码，返回二维码 URL。用户在认证器 App 添加后，
+     * 需调用 /auth/mfa/verify（不传 mfaToken）完成启用确认。</p>
+     *
+     * @return MFA 初始化响应
+     */
+    @PostMapping("/mfa/setup")
+    @Operation(summary = "初始化MFA", description = "为当前登录用户初始化 MFA，返回密钥、二维码与备用码")
+    public Result<MfaSetupVO> setupMfa() {
+        Long userId = requireLogin();
+        log.info("初始化 MFA: userId={}", userId);
+        MfaSetupVO vo = mfaService.setupMfa(userId);
+        return Result.success(vo);
+    }
+
+    /**
+     * 验证 MFA 码（登录第二阶段或 setup 启用确认）
+     *
+     * <p>当请求体携带 mfaToken 时为登录第二阶段验证，验证通过后返回正式 token；
+     * 当未携带 mfaToken 时为 setup 启用确认，验证通过后启用 MFA。</p>
+     *
+     * @param dto MFA 验证请求
+     * @return 登录第二阶段返回 LoginVO，启用确认返回 Boolean
+     */
+    @PostMapping("/mfa/verify")
+    @Operation(summary = "验证MFA码", description = "登录第二阶段验证或 MFA 启用确认")
+    public Result<Object> verifyMfa(@Valid @RequestBody MfaVerifyDTO dto) {
+        if (StrUtil.isNotBlank(dto.getMfaToken())) {
+            // 登录第二阶段验证
+            log.info("MFA 登录第二阶段验证");
+            LoginVO vo = userService.completeMfaLogin(dto.getMfaToken(), dto.getCode());
+            return Result.success(vo);
+        }
+        // setup 启用确认
+        Long userId = requireLogin();
+        log.info("MFA 启用确认: userId={}", userId);
+        boolean ok = mfaService.verifyMfa(userId, dto.getCode());
+        if (!ok) {
+            return Result.fail(ResultCode.CAPTCHA_ERROR, "MFA 验证码错误");
+        }
+        return Result.success(true);
+    }
+
+    /**
+     * 禁用 MFA（需登录 + 验证码）
+     *
+     * @param dto MFA 验证请求
+     * @return 是否禁用成功
+     */
+    @PostMapping("/mfa/disable")
+    @Operation(summary = "禁用MFA", description = "禁用当前用户的 MFA，需提供验证码")
+    public Result<Boolean> disableMfa(@Valid @RequestBody MfaVerifyDTO dto) {
+        Long userId = requireLogin();
+        log.info("禁用 MFA: userId={}", userId);
+        boolean ok = mfaService.disableMfa(userId, dto.getCode());
+        if (!ok) {
+            return Result.fail(ResultCode.CAPTCHA_ERROR, "MFA 验证码错误，禁用失败");
+        }
+        return Result.success(true);
+    }
+
+    /**
+     * 查询当前用户 MFA 状态
+     *
+     * @return 是否已启用 MFA
+     */
+    @GetMapping("/mfa/status")
+    @Operation(summary = "查询MFA状态", description = "查询当前登录用户的 MFA 启用状态")
+    public Result<Boolean> mfaStatus() {
+        Long userId = requireLogin();
+        boolean enabled = mfaService.isMfaEnabled(userId);
+        return Result.success(enabled);
+    }
+
+    /**
+     * 获取当前登录用户ID，未登录抛出业务异常
+     *
+     * @return 用户ID
+     */
+    private Long requireLogin() {
+        Long userId = UserContext.getUserId();
+        if (userId == null) {
+            throw new BusinessException(ResultCode.UNAUTHORIZED);
+        }
+        return userId;
     }
 }

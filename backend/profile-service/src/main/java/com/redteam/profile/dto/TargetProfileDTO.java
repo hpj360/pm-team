@@ -9,7 +9,10 @@ import java.util.List;
 import java.util.Map;
 
 /**
- * 目标画像DTO
+ * 目标画像 DTO
+ *
+ * <p>聚合目标基本信息、组织架构、技术资产、攻击面、历史事件、关联目标等完整画像数据。
+ * 用于前端画像详情页及画像导出。</p>
  *
  * @author 红方团队
  */
@@ -38,6 +41,12 @@ public class TargetProfileDTO implements Serializable {
     private Integer type;
 
     /**
+     * 所属行业
+     */
+    @Schema(description = "所属行业")
+    private String industry;
+
+    /**
      * 目标描述
      */
     @Schema(description = "目标描述")
@@ -56,16 +65,46 @@ public class TargetProfileDTO implements Serializable {
     private List<String> tags;
 
     /**
-     * 风险等级
+     * 风险等级（1-低，2-中，3-高）
      */
     @Schema(description = "风险等级")
     private Integer riskLevel;
 
     /**
-     * 基本信息
+     * 画像状态（0-未生成，1-生成中，2-已生成，3-生成失败）
+     */
+    @Schema(description = "画像状态")
+    private Integer profileStatus;
+
+    /**
+     * 是否关注
+     */
+    @Schema(description = "是否关注")
+    private Integer isFollowed;
+
+    /**
+     * 基本信息（动态字段，来自 t_target.basic_info 或解析自实体字段）
      */
     @Schema(description = "基本信息")
     private Map<String, Object> basicInfo;
+
+    /**
+     * 组织架构（解析自 orgStructure JSON）
+     */
+    @Schema(description = "组织架构")
+    private List<Map<String, Object>> orgStructure;
+
+    /**
+     * 技术资产（解析自 techAssets JSON）
+     */
+    @Schema(description = "技术资产")
+    private List<TechAsset> techAssets;
+
+    /**
+     * 攻击面（解析自 attackSurface JSON）
+     */
+    @Schema(description = "攻击面")
+    private AttackSurface attackSurface;
 
     /**
      * 联系方式
@@ -78,6 +117,24 @@ public class TargetProfileDTO implements Serializable {
      */
     @Schema(description = "关联目标")
     private List<RelatedTarget> relatedTargets;
+
+    /**
+     * 历史事件
+     */
+    @Schema(description = "历史事件")
+    private List<HistoryEvent> historyEvents;
+
+    /**
+     * 关联文件 ID 列表
+     */
+    @Schema(description = "关联文件ID列表")
+    private List<Long> relatedFileIds;
+
+    /**
+     * 关联 IOC 列表
+     */
+    @Schema(description = "关联IOC列表")
+    private List<String> relatedIocs;
 
     /**
      * 活动时间线
@@ -108,6 +165,51 @@ public class TargetProfileDTO implements Serializable {
      */
     @Schema(description = "更新时间")
     private LocalDateTime updateTime;
+
+    /**
+     * 技术资产信息
+     */
+    @Data
+    @Schema(description = "技术资产")
+    public static class TechAsset implements Serializable {
+        private static final long serialVersionUID = 1L;
+
+        @Schema(description = "资产类型（DOMAIN/IP/CERT/SUBDOMAIN/URL）")
+        private String assetType;
+
+        @Schema(description = "资产值")
+        private String value;
+
+        @Schema(description = "首次发现时间")
+        private LocalDateTime firstSeen;
+
+        @Schema(description = "最后发现时间")
+        private LocalDateTime lastSeen;
+
+        @Schema(description = "来源")
+        private String source;
+    }
+
+    /**
+     * 攻击面信息
+     */
+    @Data
+    @Schema(description = "攻击面")
+    public static class AttackSurface implements Serializable {
+        private static final long serialVersionUID = 1L;
+
+        @Schema(description = "开放端口列表")
+        private List<Integer> openPorts;
+
+        @Schema(description = "暴露服务列表")
+        private List<String> services;
+
+        @Schema(description = "入口点列表")
+        private List<String> entryPoints;
+
+        @Schema(description = "风险评分")
+        private Double riskScore;
+    }
 
     /**
      * 联系方式信息
@@ -146,6 +248,30 @@ public class TargetProfileDTO implements Serializable {
 
         @Schema(description = "关联强度")
         private Double strength;
+    }
+
+    /**
+     * 历史事件
+     */
+    @Data
+    @Schema(description = "历史事件")
+    public static class HistoryEvent implements Serializable {
+        private static final long serialVersionUID = 1L;
+
+        @Schema(description = "事件ID")
+        private Long eventId;
+
+        @Schema(description = "事件时间")
+        private LocalDateTime eventTime;
+
+        @Schema(description = "事件类型")
+        private String eventType;
+
+        @Schema(description = "事件描述")
+        private String description;
+
+        @Schema(description = "来源文件ID")
+        private Long fileId;
     }
 
     /**

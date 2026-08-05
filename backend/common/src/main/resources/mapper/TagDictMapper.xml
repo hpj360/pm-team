@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.redteam.common.mapper.TagDictMapper">
+
+    <!-- 通用结果映射 -->
+    <resultMap id="TagDictResultMap" type="com.redteam.common.entity.TagDictEntity">
+        <id     column="id"                 property="id"/>
+        <result column="tag_code"           property="tagCode"/>
+        <result column="tag_name"           property="tagName"/>
+        <result column="layer"              property="layer"/>
+        <result column="category"           property="category"/>
+        <result column="value_type"         property="valueType"/>
+        <result column="applicable_object"  property="applicableObject"/>
+        <result column="identify_rule"      property="identifyRule"/>
+        <result column="is_multi"           property="isMulti"/>
+        <result column="parent_code"        property="parentCode"/>
+        <result column="enabled"            property="enabled"/>
+        <result column="description"        property="description"/>
+        <result column="created_at"         property="createdAt"/>
+        <result column="updated_at"         property="updatedAt"/>
+    </resultMap>
+
+    <!-- 公共字段列 -->
+    <sql id="Base_Column_List">
+        id, tag_code, tag_name, layer, category, value_type, applicable_object,
+        identify_rule, is_multi, parent_code, enabled, description,
+        created_at, updated_at
+    </sql>
+
+    <!-- 树形查询：按层级（L1-L6）排序返回全部标签 -->
+    <select id="selectAllOrderByLayer" resultMap="TagDictResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM tag_dict_v2
+        ORDER BY layer ASC, parent_code ASC, tag_code ASC
+    </select>
+
+    <!-- 按层级查询 -->
+    <select id="selectByLayer" resultMap="TagDictResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM tag_dict_v2
+        WHERE layer = #{layer}
+        ORDER BY parent_code ASC, tag_code ASC
+    </select>
+
+    <!-- 按编码查询 -->
+    <select id="selectByCode" resultMap="TagDictResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM tag_dict_v2
+        WHERE tag_code = #{tagCode}
+    </select>
+
+    <!-- 按启用状态查询 -->
+    <select id="selectByEnabled" resultMap="TagDictResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM tag_dict_v2
+        WHERE enabled = #{enabled}
+        ORDER BY layer ASC, parent_code ASC, tag_code ASC
+    </select>
+
+</mapper>

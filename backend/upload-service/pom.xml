@@ -71,6 +71,22 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
+        <!-- 国密算法 BouncyCastle（SM2/SM3/SM4，提供 SM3 文件指纹能力） -->
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcprov-jdk18on</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.bouncycastle</groupId>
+            <artifactId>bcpkix-jdk18on</artifactId>
+        </dependency>
+
+        <!-- Hutool 工具类（DigestUtil/IdUtil/JSONUtil 等） -->
+        <dependency>
+            <groupId>cn.hutool</groupId>
+            <artifactId>hutool-all</artifactId>
+        </dependency>
+
         <!-- Knife4j API文档 -->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>

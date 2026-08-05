@@ -41,3 +41,19 @@ target/
 **/application-prod.yml
 **/application-secret.yml
 **/application-local.yml
+
+# Test artifacts
+frontend/coverage/
+frontend/test-results*.json
+frontend/test-results*.txt
+frontend/tsc-errors*.txt
+
+# Windows special
+nul
+
+# Trae workspace
+.trae/memory/
+.trae/cache/
+
+# Tools (JDK/Maven local installs)
+.tools/

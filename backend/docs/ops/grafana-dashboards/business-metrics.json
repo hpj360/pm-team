@@ -1,0 +1,143 @@
+{
+  "title": "红方平台 - 业务指标 (v5.4)",
+  "uid": "redteam-business-metrics",
+  "version": 1,
+  "schemaVersion": 39,
+  "description": "业务核心指标：文件解析、AI 调用、工作流审批、Kafka 消费积压。数据源：BusinessMetricsRecorder 上报。",
+  "tags": ["redteam", "business", "v5.4"],
+  "timezone": "browser",
+  "time": { "from": "now-3h", "to": "now" },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" },
+        "hide": 0,
+        "label": "数据源"
+      },
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": "${datasource}",
+        "query": "label_values(file_parse_total, service)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "label": "服务"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "title": "文件解析",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "stat",
+          "title": "解析成功总数",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+          "targets": [{ "expr": "sum(increase(file_parse_total{service=~\"$service\",status=\"success\"}[1h]))", "legendFormat": "success" }],
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "green", "value": 1 }] } } }
+        },
+        {
+          "type": "stat",
+          "title": "解析失败总数",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+          "targets": [{ "expr": "sum(increase(file_parse_total{service=~\"$service\",status=\"fail\"}[1h]))", "legendFormat": "fail" }],
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+        },
+        {
+          "type": "stat",
+          "title": "解析成功率",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+          "targets": [{ "expr": "sum(increase(file_parse_total{service=~\"$service\",status=\"success\"}[1h])) / sum(increase(file_parse_total{service=~\"$service\"}[1h]))", "legendFormat": "success ratio" }],
+          "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 0.9 }, { "color": "green", "value": 0.99 }] } } }
+        },
+        {
+          "type": "timeseries",
+          "title": "解析速率 (按 fileType)",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 4 },
+          "targets": [{ "expr": "sum(rate(file_parse_total{service=~\"$service\"}[5m])) by (fileType, status)", "legendFormat": "{{fileType}} / {{status}}" }],
+          "fieldConfig": { "defaults": { "unit": "ops" } }
+        }
+      ]
+    },
+    {
+      "title": "AI 服务调用",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "AI 调用速率 (按 service/result)",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [{ "expr": "sum(rate(ai_invoke_total{service=~\"$service\"}[5m])) by (service, result)", "legendFormat": "{{service}} / {{result}}" }],
+          "fieldConfig": { "defaults": { "unit": "ops" } }
+        },
+        {
+          "type": "stat",
+          "title": "AI 降级调用次数 (近 1h)",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 6, "x": 12, "y": 0 },
+          "targets": [{ "expr": "sum(increase(ai_invoke_total{result=\"degraded\"}[1h]))", "legendFormat": "degraded" }],
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+        },
+        {
+          "type": "stat",
+          "title": "AI 失败率",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 6, "x": 18, "y": 0 },
+          "targets": [{ "expr": "sum(rate(ai_invoke_total{result=\"fail\"}[5m])) / sum(rate(ai_invoke_total[5m]))", "legendFormat": "fail ratio" }],
+          "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.05 }, { "color": "red", "value": 0.1 }] } } }
+        }
+      ]
+    },
+    {
+      "title": "工作流审批",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "审批耗时 P50/P95 (按 stage)",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+          "targets": [
+            { "expr": "histogram_quantile(0.50, sum(rate(workflow_approval_duration_seconds_bucket[5m])) by (le, stage))", "legendFormat": "{{stage}} P50" },
+            { "expr": "histogram_quantile(0.95, sum(rate(workflow_approval_duration_seconds_bucket[5m])) by (le, stage))", "legendFormat": "{{stage}} P95" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "s" } }
+        }
+      ]
+    },
+    {
+      "title": "Kafka 消费积压",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Kafka 积压 (按 topic)",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 16, "x": 0, "y": 0 },
+          "targets": [{ "expr": "kafka_lag", "legendFormat": "{{topic}}" }],
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 5000 }, { "color": "red", "value": 10000 }] } } }
+        },
+        {
+          "type": "stat",
+          "title": "最大积压 topic",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+          "targets": [{ "expr": "max(kafka_lag)", "legendFormat": "max lag" }],
+          "fieldConfig": { "defaults": { "unit": "short" } }
+        }
+      ]
+    }
+  ]
+}

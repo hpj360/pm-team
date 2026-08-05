@@ -1,0 +1,125 @@
+syntax = "proto3";
+
+package redteam.notification;
+
+import "common.proto";
+
+option java_package = "com.redteam.notification.grpc";
+option java_multiple_files = true;
+option go_package = "redteam/notification;notificationpb";
+
+// ============================================================================
+// 通知服务 gRPC 定义
+// 提供跨服务的同步通知发送能力（异步通知走 Kafka 事件）
+// 服务端口：gRPC 9091（与 notification-service REST 8091 同进程）
+// ============================================================================
+
+service NotificationService {
+  // 发送通知（同步）
+  rpc SendNotification(SendNotificationRequest) returns (SendNotificationResponse);
+
+  // 批量发送通知
+  rpc BatchSendNotification(BatchSendNotificationRequest) returns (BatchSendNotificationResponse);
+
+  // 查询通知发送状态
+  rpc GetNotificationStatus(GetNotificationStatusRequest) returns (NotificationStatus);
+
+  // 健康检查
+  rpc Health(redteam.common.HealthCheckRequest) returns (redteam.common.HealthCheckResponse);
+}
+
+// ============================================================================
+// 通知发送
+// ============================================================================
+
+message SendNotificationRequest {
+  // 接收人用户 ID 列表（与 role_codes 二选一）
+  repeated string recipient_ids = 1;
+  // 接收角色编码列表（按角色广播）
+  repeated string role_codes = 2;
+  // 通知通道：IN_APP / EMAIL / SMS / FEISHU / WEBHOOK
+  repeated string channels = 3;
+  // 通知模板编码（与 title/body 二选一）
+  string template_code = 4;
+  // 模板参数（key-value）
+  repeated redteam.common.KeyValue template_params = 5;
+  // 通知标题（无模板时使用）
+  string title = 6;
+  // 通知正文（无模板时使用，支持 Markdown）
+  string body = 7;
+  // 通知级别：INFO / WARN / ERROR / CRITICAL
+  string level = 8;
+  // 业务类别：TASK / FILE / SYSTEM / SECURITY
+  string category = 9;
+  // 跳转链接
+  string action_url = 16;
+  // 关联资源类型
+  string ref_type = 17;
+  // 关联资源 ID
+  string ref_id = 18;
+  // 租户 ID
+  string tenant_id = 19;
+  // 发起人用户 ID（系统通知为 SYSTEM）
+  string sender_id = 20;
+}
+
+message SendNotificationResponse {
+  // 通知 ID
+  string notification_id = 1;
+  // 是否发送成功
+  bool success = 2;
+  // 失败原因
+  string error_message = 3;
+}
+
+message BatchSendNotificationRequest {
+  // 批量通知请求
+  repeated SendNotificationRequest requests = 1;
+}
+
+message BatchSendNotificationResponse {
+  // 发送结果列表
+  repeated SendNotificationResponse results = 1;
+  // 成功数
+  int32 success_count = 2;
+  // 失败数
+  int32 failed_count = 3;
+}
+
+// ============================================================================
+// 通知状态查询
+// ============================================================================
+
+message GetNotificationStatusRequest {
+  // 通知 ID
+  string notification_id = 1;
+}
+
+message NotificationStatus {
+  // 通知 ID
+  string notification_id = 1;
+  // 发送状态：PENDING / SENDING / SENT / DELIVERED / READ / FAILED
+  string status = 2;
+  // 通道发送明细
+  repeated ChannelStatus channels = 3;
+  // 发送时间（毫秒时间戳）
+  int64 sent_at = 4;
+  // 送达时间（毫秒时间戳）
+  int64 delivered_at = 5;
+  // 失败原因
+  string error_message = 6;
+}
+
+// 单通道发送状态
+message ChannelStatus {
+  // 通道：IN_APP / EMAIL / SMS / FEISHU / WEBHOOK
+  string channel = 1;
+  // 该通道发送状态
+  string status = 2;
+  // 第三方回执 ID
+  string provider_message_id = 3;
+  // 失败原因
+  string error_message = 4;
+  // 发送时间（毫秒时间戳）
+  int64 sent_at = 5;
+}

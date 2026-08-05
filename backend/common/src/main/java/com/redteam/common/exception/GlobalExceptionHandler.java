@@ -7,6 +7,7 @@ import jakarta.validation.ConstraintViolation;
 import jakarta.validation.ConstraintViolationException;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 import org.springframework.validation.BindException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.HttpRequestMethodNotSupportedException;
@@ -35,14 +36,22 @@ public class GlobalExceptionHandler {
     /**
      * 处理业务异常
      *
+     * <p>当错误码为 429（限流）时，返回 HTTP 429 状态码并附带 Retry-After 响应头，
+     * 提示客户端稍后重试；其他业务异常统一返回 HTTP 200 + 业务错误码。</p>
+     *
      * @param e       业务异常
      * @param request HTTP请求
      * @return 响应结果
      */
     @ExceptionHandler(BusinessException.class)
-    public Result<Void> handleBusinessException(BusinessException e, HttpServletRequest request) {
+    public ResponseEntity<Result<Void>> handleBusinessException(BusinessException e, HttpServletRequest request) {
         log.warn("业务异常: {} - {}", request.getRequestURI(), e.getMessage());
-        return Result.fail(e.getCode(), e.getMessage());
+        if (e.getCode() != null && e.getCode() == 429) {
+            return ResponseEntity.status(429)
+                    .header("Retry-After", "1")
+                    .body(Result.fail(e.getCode(), e.getMessage()));
+        }
+        return ResponseEntity.ok(Result.fail(e.getCode(), e.getMessage()));
     }
 
     /**

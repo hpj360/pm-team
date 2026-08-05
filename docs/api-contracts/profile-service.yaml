@@ -1,0 +1,624 @@
+openapi: 3.0.3
+info:
+  title: 红方文件汇聚平台 - 画像服务 API
+  description: |
+    画像服务，提供目标管理、画像生成、关系图谱能力。
+
+    - 服务端口：8085
+    - API 前缀：/api/v1
+    - 认证方式：Bearer JWT
+    - 限流策略：500 QPS / 租户
+    - 图谱后端：Neo4j
+  version: 1.0.0
+  contact:
+    name: 红方团队
+    email: redteam@example.com
+
+servers:
+  - url: http://localhost:8085
+    description: 本地开发环境
+  - url: https://api.redteam.internal/profile
+    description: 生产环境
+
+tags:
+  - name: 目标管理
+    description: 目标 CRUD
+  - name: 目标画像
+    description: 画像生成与查询
+  - name: 关系图谱
+    description: 关系图谱与关联
+
+paths:
+  /api/v1/targets:
+    post:
+      tags: [目标管理]
+      summary: 创建目标
+      description: 创建一个红方作战目标（个人/组织/资产）。
+      operationId: createTarget
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TargetCreateRequest'
+      responses:
+        '200':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetResult'
+        '409':
+          description: 目标已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+    get:
+      tags: [目标管理]
+      summary: 目标列表
+      operationId: listTargets
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - name: name
+          in: query
+          schema:
+            type: string
+        - name: type
+          in: query
+          schema:
+            type: string
+            enum: [PERSON, ORGANIZATION, ASSET, CAMPAIGN]
+        - name: threatLevel
+          in: query
+          schema:
+            type: string
+            enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        - name: tag
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetPageResult'
+
+  /api/v1/targets/{targetId}:
+    get:
+      tags: [目标管理]
+      summary: 目标详情
+      operationId: getTarget
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TargetIdPath'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [目标管理]
+      summary: 更新目标
+      operationId: updateTarget
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TargetIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/TargetUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TargetResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [目标管理]
+      summary: 删除目标
+      operationId: deleteTarget
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TargetIdPath'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/targets/{targetId}/profile:
+    get:
+      tags: [目标画像]
+      summary: 目标画像
+      description: |
+        获取目标综合画像，包含基本信息、关联文件、IOC、行为特征、威胁等级。
+        画像由分析数据自动汇聚生成，也可手动编辑补充。
+      operationId: getTargetProfile
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TargetIdPath'
+        - name: refresh
+          in: query
+          description: 是否强制刷新画像（重新汇总）
+          schema:
+            type: boolean
+            default: false
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/TargetProfile'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/targets/{targetId}/graph:
+    get:
+      tags: [关系图谱]
+      summary: 关系图谱
+      description: 返回目标关系图谱（节点 + 边），用于前端可视化。
+      operationId: getTargetGraph
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TargetIdPath'
+        - name: depth
+          in: query
+          description: 图谱遍历深度（1-3）
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 3
+            default: 2
+        - name: nodeTypes
+          in: query
+          description: 节点类型过滤（逗号分隔）
+          schema:
+            type: string
+            example: TARGET,FILE,IOC,ENTITY
+        - name: limit
+          in: query
+          description: 最大节点数
+          schema:
+            type: integer
+            maximum: 500
+            default: 100
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/RelationGraph'
+
+  /api/v1/targets/{targetId}/relate:
+    post:
+      tags: [关系图谱]
+      summary: 关联文件/目标
+      description: 将文件或其他目标与当前目标建立关联关系。
+      operationId: relateTarget
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/TargetIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                ref_type:
+                  type: string
+                  enum: [FILE, TARGET, IOC, ENTITY]
+                  description: 关联资源类型
+                ref_id:
+                  type: string
+                  description: 关联资源 ID
+                relation:
+                  type: string
+                  description: 关系类型（如 owns、contacts、uses、targets）
+                weight:
+                  type: number
+                  format: float
+                  description: 关系权重（0-1）
+                  default: 1.0
+                remark:
+                  type: string
+              required: [ref_type, ref_id, relation]
+      responses:
+        '200':
+          description: 关联成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    SizeParam:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    TargetIdPath:
+      name: targetId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    NotFound:
+      description: 目标不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+          example:
+            code: 60001
+            message: 目标不存在
+            data: null
+            timestamp: 1785086825000
+
+  schemas:
+    ApiResult:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          nullable: true
+        timestamp:
+          type: integer
+          format: int64
+      required: [code, message, timestamp]
+
+    PageData:
+      type: object
+      properties:
+        records:
+          type: array
+          items: {}
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        size:
+          type: integer
+      required: [records, total, page, size]
+
+    Target:
+      type: object
+      description: 目标信息
+      properties:
+        target_id:
+          type: string
+        name:
+          type: string
+          description: 目标名称
+        type:
+          type: string
+          enum: [PERSON, ORGANIZATION, ASSET, CAMPAIGN]
+          description: 目标类型
+        aliases:
+          type: array
+          items:
+            type: string
+          description: 别名列表
+        description:
+          type: string
+        threat_level:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        threat_score:
+          type: number
+          format: float
+          description: 威胁评分（0-100）
+        status:
+          type: string
+          enum: [ACTIVE, ARCHIVED, WATCHING]
+        tags:
+          type: array
+          items:
+            type: string
+        attributes:
+          type: object
+          description: 自定义属性
+          additionalProperties: true
+        file_count:
+          type: integer
+          description: 关联文件数
+        ioc_count:
+          type: integer
+          description: 关联 IOC 数
+        creator_id:
+          type: string
+        tenant_id:
+          type: string
+        created_at:
+          type: integer
+          format: int64
+        updated_at:
+          type: integer
+          format: int64
+
+    TargetCreateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          description: 目标名称
+        type:
+          type: string
+          enum: [PERSON, ORGANIZATION, ASSET, CAMPAIGN]
+        aliases:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        threat_level:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+          default: LOW
+        tags:
+          type: array
+          items:
+            type: string
+        attributes:
+          type: object
+          additionalProperties: true
+      required: [name, type]
+
+    TargetUpdateRequest:
+      type: object
+      properties:
+        name:
+          type: string
+        aliases:
+          type: array
+          items:
+            type: string
+        description:
+          type: string
+        threat_level:
+          type: string
+          enum: [LOW, MEDIUM, HIGH, CRITICAL]
+        status:
+          type: string
+          enum: [ACTIVE, ARCHIVED, WATCHING]
+        tags:
+          type: array
+          items:
+            type: string
+        attributes:
+          type: object
+          additionalProperties: true
+
+    TargetResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Target'
+
+    TargetPageResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/PageData'
+                - type: object
+                  properties:
+                    records:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Target'
+
+    TargetProfile:
+      type: object
+      description: 目标画像
+      properties:
+        target_id:
+          type: string
+        target:
+          $ref: '#/components/schemas/Target'
+        summary:
+          type: string
+          description: 画像摘要
+        threat_assessment:
+          type: object
+          description: 威胁评估
+          properties:
+            level:
+              type: string
+            score:
+              type: number
+              format: float
+            confidence:
+              type: number
+              format: float
+            reasons:
+              type: array
+              items:
+                type: string
+        behavioral_features:
+          type: array
+          description: 行为特征
+          items:
+            type: object
+            properties:
+              feature:
+                type: string
+              value:
+                type: string
+              confidence:
+                type: number
+                format: float
+        known_iocs:
+          type: array
+          items:
+            type: object
+            properties:
+              ioc_value:
+                type: string
+              ioc_type:
+                type: string
+              malicious:
+                type: boolean
+              first_seen:
+                type: integer
+                format: int64
+              last_seen:
+                type: integer
+                format: int64
+        related_files:
+          type: array
+          items:
+            type: object
+            properties:
+              file_id:
+                type: string
+              name:
+                type: string
+              threat_score:
+                type: number
+                format: float
+              relation:
+                type: string
+        related_targets:
+          type: array
+          items:
+            type: object
+            properties:
+              target_id:
+                type: string
+              name:
+                type: string
+              relation:
+                type: string
+              weight:
+                type: number
+                format: float
+        timeline:
+          type: array
+          description: 关键事件时间线
+          items:
+            type: object
+            properties:
+              time:
+                type: integer
+                format: int64
+              event:
+                type: string
+              description:
+                type: string
+        generated_at:
+          type: integer
+          format: int64
+        version:
+          type: integer
+
+    RelationGraph:
+      type: object
+      description: 关系图谱
+      properties:
+        nodes:
+          type: array
+          items:
+            type: object
+            properties:
+              id:
+                type: string
+              label:
+                type: string
+              type:
+                type: string
+                enum: [TARGET, FILE, IOC, ENTITY]
+              properties:
+                type: object
+                additionalProperties: true
+        edges:
+          type: array
+          items:
+            type: object
+            properties:
+              source:
+                type: string
+              target:
+                type: string
+              relation:
+                type: string
+              weight:
+                type: number
+                format: float
+              properties:
+                type: object
+                additionalProperties: true
+        depth:
+          type: integer
+        total_nodes:
+          type: integer
+        total_edges:
+          type: integer

@@ -1,0 +1,63 @@
+# ==========================================
+# 红方文件分析管理平台 - 告警规则定义 (v5.4)
+# ==========================================
+# 本文件为内置告警规则的声明式定义，与 AlertRule.builtinRules() 一致。
+# 同时作为 Prometheus alertmanager 规则的参考来源（生产部署使用 docs/ops/prometheus-alert-rules.yml）。
+# 字段说明：
+#   name        规则名（唯一标识，对应 Prometheus alert name）
+#   expr        PromQL 表达式
+#   for         触发持续时长
+#   severity    P0/P1/P2
+#   feishu_webhook 规则级飞书 Webhook（为空则用全局 redteam.telemetry.alert.feishu.webhook）
+#   summary     规则摘要
+#   description 规则描述
+#   labels      附加标签
+#   annotations 附加注解
+# ==========================================
+
+rules:
+  - name: error_rate_high
+    expr: 'rate(http_server_requests_seconds_count{status=~"5.."}[5m]) > 0.05'
+    for: 5m
+    severity: P1
+    summary: HTTP 5xx 错误率过高
+    description: 近 5 分钟 5xx 请求速率超过 0.05，可能存在服务异常
+    labels:
+      category: http
+      service: gateway
+
+  - name: ai_degraded
+    expr: 'ai_invoke_total{result="degraded"} > 0'
+    for: 1m
+    severity: P1
+    summary: AI 服务出现降级调用
+    description: AI 调用出现降级（degraded），需检查模型服务可用性
+    labels:
+      category: ai
+      service: ai-service
+
+  - name: rate_limit_triggered
+    expr: 'rate_limited_total > 100'
+    for: 2m
+    severity: P2
+    summary: 限流频繁触发
+    description: 近 2 分钟限流触发次数超过 100，需关注流量或容量
+    labels:
+      category: ratelimit
+
+  - name: kafka_lag_high
+    expr: 'kafka_lag > 10000'
+    for: 5m
+    severity: P1
+    summary: Kafka 消费积压过高
+    description: Kafka 积压消息数超过 10000 且持续 5 分钟，消费者可能阻塞
+    labels:
+      category: kafka
+
+# ==========================================
+# 告警分级触达策略
+# ==========================================
+# P0 致命：电话（预留）+ 飞书红色加急卡片 + @all
+# P1 严重：飞书红/橙色加急卡片 + @all
+# P2 一般：飞书蓝色普通卡片
+# ==========================================

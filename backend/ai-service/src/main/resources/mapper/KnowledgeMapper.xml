@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.redteam.ai.mapper.KnowledgeMapper">
+
+    <select id="selectAllOrderByCreatedAtDesc" resultType="com.redteam.ai.entity.KnowledgeEntity">
+        SELECT knowledge_id, title, content, source, metadata_json, created_at
+        FROM ai_knowledge
+        ORDER BY created_at DESC
+    </select>
+
+</mapper>

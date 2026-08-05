@@ -25,14 +25,14 @@ export function formatFileSize(bytes: number): string {
  */
 export function formatDateTime(date: string | Date, format: string = 'YYYY-MM-DD HH:mm:ss'): string {
   const d = typeof date === 'string' ? new Date(date) : date;
-  
+
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
   const day = String(d.getDate()).padStart(2, '0');
   const hours = String(d.getHours()).padStart(2, '0');
   const minutes = String(d.getMinutes()).padStart(2, '0');
   const seconds = String(d.getSeconds()).padStart(2, '0');
-  
+
   return format
     .replace('YYYY', String(year))
     .replace('MM', month)
@@ -40,6 +40,15 @@ export function formatDateTime(date: string | Date, format: string = 'YYYY-MM-DD
     .replace('HH', hours)
     .replace('mm', minutes)
     .replace('ss', seconds);
+}
+
+/**
+ * 格式化日期（仅日期，不含时间）
+ * @param date 日期字符串或Date对象
+ * @returns 格式化后的字符串 YYYY-MM-DD
+ */
+export function formatDate(date: string | Date): string {
+  return formatDateTime(date, 'YYYY-MM-DD');
 }
 
 /**
@@ -174,3 +183,6 @@ export function isImageFile(filename: string): boolean {
   const ext = getFileExtension(filename);
   return imageExtensions.includes(ext) || filename.startsWith('image/');
 }
+
+export * from './hash';
+export * from './fileType';

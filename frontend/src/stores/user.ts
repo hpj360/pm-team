@@ -1,20 +1,25 @@
 /**
  * 用户状态管理
+ * - 登录 / 登出
+ * - MFA 两阶段登录状态
  */
-
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import type { UserInfo } from '@/types';
 
 interface UserState {
-  // 状态
   user: UserInfo | null;
   token: string | null;
   isLoggedIn: boolean;
-  
-  // 操作
+  /** MFA 两阶段登录临时 token */
+  mfaToken: string | null;
+  /** 是否处于 MFA 验证阶段 */
+  mfaPending: boolean;
+
   setUser: (user: UserInfo | null) => void;
   setToken: (token: string | null) => void;
+  setMfaToken: (token: string | null) => void;
+  setMfaPending: (pending: boolean) => void;
   login: (user: UserInfo, token: string) => void;
   logout: () => void;
   updateUser: (user: Partial<UserInfo>) => void;
@@ -23,15 +28,14 @@ interface UserState {
 export const useUserStore = create<UserState>()(
   persist(
     (set) => ({
-      // 初始状态
       user: null,
       token: null,
       isLoggedIn: false,
+      mfaToken: null,
+      mfaPending: false,
 
-      // 设置用户信息
       setUser: (user) => set({ user, isLoggedIn: !!user }),
 
-      // 设置Token
       setToken: (token) => {
         if (token) {
           localStorage.setItem('token', token);
@@ -41,31 +45,43 @@ export const useUserStore = create<UserState>()(
         set({ token });
       },
 
-      // 登录
+      setMfaToken: (mfaToken) => set({ mfaToken }),
+      setMfaPending: (mfaPending) => set({ mfaPending }),
+
       login: (user, token) => {
         localStorage.setItem('token', token);
-        set({ user, token, isLoggedIn: true });
+        set({
+          user,
+          token,
+          isLoggedIn: true,
+          mfaToken: null,
+          mfaPending: false,
+        });
       },
 
-      // 登出
       logout: () => {
         localStorage.removeItem('token');
-        set({ user: null, token: null, isLoggedIn: false });
+        set({
+          user: null,
+          token: null,
+          isLoggedIn: false,
+          mfaToken: null,
+          mfaPending: false,
+        });
       },
 
-      // 更新用户信息
       updateUser: (userData) =>
         set((state) => ({
           user: state.user ? { ...state.user, ...userData } : null,
         })),
     }),
     {
-      name: 'user-storage', // localStorage key
+      name: 'user-storage',
       partialize: (state) => ({
         user: state.user,
         token: state.token,
         isLoggedIn: state.isLoggedIn,
       }),
-    }
-  )
+    },
+  ),
 );

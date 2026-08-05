@@ -53,6 +53,12 @@
             <artifactId>spring-kafka</artifactId>
         </dependency>
 
+        <!-- Spring Data Neo4j (v2.8 新增: 图数据库关系图谱) -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-data-neo4j</artifactId>
+        </dependency>
+
         <!-- Knife4j API文档 -->
         <dependency>
             <groupId>com.github.xiaoymin</groupId>

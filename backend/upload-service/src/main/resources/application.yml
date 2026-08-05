@@ -63,6 +63,18 @@ knife4j:
   setting:
     language: zh_cn
 
+# 红方平台上传配置（v2.3 新增：分片上传 + 秒传）
+redteam:
+  upload:
+    chunk-size: 5242880              # 单分片大小：5MB
+    max-file-size: 53687091200       # 单文件大小上限：50GB
+    preview-expire-seconds: 3600     # 预签名URL过期时间：1小时
+    bucket-name: redteam-files       # MinIO 存储桶名称
+  kafka:
+    bootstrap-servers: localhost:9092
+    topic:
+      file-events: redteam.file.events
+
 # 日志配置
 logging:
   level:

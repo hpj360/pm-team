@@ -1,0 +1,148 @@
+{
+  "title": "红方平台 - 系统总览 (v5.4)",
+  "uid": "redteam-system-overview",
+  "version": 1,
+  "schemaVersion": 39,
+  "description": "红方文件分析管理平台系统总览：服务健康、QPS、错误率、P95 延迟、JVM 关键指标。",
+  "tags": ["redteam", "overview", "v5.4"],
+  "timezone": "browser",
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" },
+        "hide": 0,
+        "label": "数据源"
+      },
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": "${datasource}",
+        "query": "label_values(http_server_requests_seconds_count, service)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "hide": 0,
+        "label": "服务"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "title": "服务健康",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "stat",
+          "title": "活跃服务数",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+          "targets": [{ "expr": "count(count by (service) (up{job=~\"redteam-.*\"}))", "legendFormat": "services" }],
+          "fieldConfig": { "defaults": { "unit": "short" } }
+        },
+        {
+          "type": "stat",
+          "title": "实例存活率",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+          "targets": [{ "expr": "avg(up{job=~\"redteam-.*\"})", "legendFormat": "up ratio" }],
+          "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 0.9 }, { "color": "green", "value": 0.99 }] } } }
+        },
+        {
+          "type": "stat",
+          "title": "当前告警数",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+          "targets": [{ "expr": "count(ALERTS{alertstate=\"firing\"})", "legendFormat": "firing" }],
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+        },
+        {
+          "type": "stat",
+          "title": "JVM 堆使用率 (max)",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+          "targets": [{ "expr": "max(jvm_memory_used_bytes{area=\"heap\",service=~\"$service\"} / jvm_memory_max_bytes{area=\"heap\",service=~\"$service\"})", "legendFormat": "heap" }],
+          "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 0.75 }, { "color": "red", "value": 0.9 }] } } }
+        }
+      ]
+    },
+    {
+      "title": "请求量与错误率",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "QPS (按服务)",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{service=~\"$service\"}[1m])) by (service)", "legendFormat": "{{service}}" }],
+          "fieldConfig": { "defaults": { "unit": "reqps" } }
+        },
+        {
+          "type": "timeseries",
+          "title": "5xx 错误率",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{service=~\"$service\",status=~\"5..\"}[5m])) by (service) / sum(rate(http_server_requests_seconds_count{service=~\"$service\"}[5m])) by (service)", "legendFormat": "{{service}}" }],
+          "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 0.05 }] } } }
+        }
+      ]
+    },
+    {
+      "title": "延迟分布",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "HTTP 请求延迟 P50/P95/P99",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+          "targets": [
+            { "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{service=~\"$service\"}[5m])) by (le))", "legendFormat": "P50" },
+            { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{service=~\"$service\"}[5m])) by (le))", "legendFormat": "P95" },
+            { "expr": "histogram_quantile(0.99, sum(rate(http_server_requests_seconds_bucket{service=~\"$service\"}[5m])) by (le))", "legendFormat": "P99" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "s" } }
+        }
+      ]
+    },
+    {
+      "title": "JVM 关键指标",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "堆内存使用 (bytes)",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+          "targets": [{ "expr": "sum(jvm_memory_used_bytes{area=\"heap\",service=~\"$service\"}) by (service)", "legendFormat": "{{service}} used" }],
+          "fieldConfig": { "defaults": { "unit": "bytes" } }
+        },
+        {
+          "type": "timeseries",
+          "title": "GC 速率",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+          "targets": [
+            { "expr": "rate(jvm_gc_pause_seconds_count{service=~\"$service\",action=\"end of major GC\"}[5m])", "legendFormat": "{{service}} major" },
+            { "expr": "rate(jvm_gc_pause_seconds_count{service=~\"$service\",action=\"end of minor GC\"}[5m])", "legendFormat": "{{service}} minor" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "ops" } }
+        },
+        {
+          "type": "timeseries",
+          "title": "活跃线程数",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+          "targets": [{ "expr": "jvm_threads_states_threads{service=~\"$service\"}", "legendFormat": "{{service}} {{state}}" }],
+          "fieldConfig": { "defaults": { "unit": "short" } }
+        }
+      ]
+    }
+  ]
+}

@@ -1,0 +1,162 @@
+server:
+  port: 8092
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: report-service
+
+  # 数据源配置
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/redteam_report?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: postgres
+    password: postgres
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      initial-size: 5
+      min-idle: 10
+      max-active: 50
+      max-wait: 60000
+      validation-query: SELECT 1
+      test-while-idle: true
+
+  # Redis配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 0
+      timeout: 10000ms
+      lettuce:
+        pool:
+          max-active: 16
+          max-idle: 8
+          min-idle: 2
+
+  # 邮件配置（定时报告推送）
+  mail:
+    host: smtp.redteam.com
+    port: 465
+    username: noreply@redteam.com
+    password: ${MAIL_PASSWORD:changeme}
+    properties:
+      mail:
+        smtp:
+          auth: true
+          ssl:
+            enable: true
+          starttls:
+            enable: true
+    default-encoding: UTF-8
+
+  # Kafka配置（订阅 redteam.task.events，task.completed 触发报告生成）
+  kafka:
+    bootstrap-servers: localhost:9092
+    consumer:
+      group-id: report-service-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+    listener:
+      ack-mode: manual_immediate
+      concurrency: 3
+
+  # Thymeleaf 模板配置（报告模板路径）
+  thymeleaf:
+    prefix: classpath:/templates/reports/
+    suffix: .html
+    mode: HTML
+    encoding: UTF-8
+    cache: false
+    servlet:
+      content-type: text/html
+
+  # 异步线程池配置
+  task:
+    execution:
+      pool:
+        core-size: 5
+        max-size: 20
+        queue-capacity: 100
+        keep-alive: 60s
+      thread-name-prefix: report-async-
+    # 定时调度线程池配置（定时报告调度器）
+    scheduling:
+      pool:
+        size: 5
+      thread-name-prefix: report-scheduler-
+
+  # Jackson 配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    default-property-inclusion: non_null
+
+# MyBatis Plus 配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.redteam.report.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Knife4j API 文档配置
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+    enable-version: true
+    enable-swagger-models: true
+
+# springdoc 配置
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /doc.html
+    enabled: true
+
+# 报告生成配置
+report:
+  # 报告输出路径
+  output-path: /data/reports/
+  # 默认模板（任务总结报告）
+  default-template: task-summary
+  # PDF 中文字体
+  pdf-font: STSong-Light
+  # PDF 字体编码
+  pdf-encoding: UniGB-UCS2-H
+  # 文件下载基础URL
+  download-base-url: http://localhost:8092/api/v1/reports
+  # 定时报告调度配置
+  schedule:
+    # 报告生成完成状态轮询间隔（毫秒）
+    poll-interval-ms: 2000
+    # 报告生成完成状态轮询最大次数（150 次 * 2 秒 = 5 分钟超时）
+    max-poll-attempts: 150
+  # Slack Webhook 推送配置（为空时跳过推送）
+  slack:
+    webhook-url: ${SLACK_WEBHOOK_URL:}
+  # 钉钉 Webhook 推送配置（为空时跳过推送）
+  dingtalk:
+    webhook-url: ${DINGTALK_WEBHOOK_URL:}
+
+# 日志配置
+logging:
+  level:
+    root: info
+    com.redteam: debug
+    org.springframework.kafka: info
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

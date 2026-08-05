@@ -1,0 +1,186 @@
+syntax = "proto3";
+
+package redteam.auth;
+
+import "common.proto";
+
+option java_package = "com.redteam.auth.grpc";
+option java_multiple_files = true;
+option go_package = "redteam/auth;authpb";
+
+// ============================================================================
+// 认证服务 gRPC 定义
+// 提供跨服务的 Token 校验、用户信息查询、权限校验能力
+// 服务端口：gRPC 9080（与 REST 8080 同进程）
+// ============================================================================
+
+service AuthService {
+  // 校验 Token 有效性，返回用户上下文
+  rpc ValidateToken(ValidateTokenRequest) returns (ValidateTokenResponse);
+
+  // 根据 userId 获取用户信息
+  rpc GetUser(GetUserRequest) returns (GetUserResponse);
+
+  // 根据 username 获取用户信息
+  rpc GetUserByName(GetUserByNameRequest) returns (GetUserResponse);
+
+  // 权限校验：判断用户是否具备指定权限
+  rpc CheckPermission(CheckPermissionRequest) returns (CheckPermissionResponse);
+
+  // 角色校验：判断用户是否具备指定角色
+  rpc CheckRole(CheckRoleRequest) returns (CheckRoleResponse);
+
+  // 注销 Token（用于强制下线）
+  rpc RevokeToken(RevokeTokenRequest) returns (redteam.common.Result);
+
+  // 健康检查
+  rpc Health(redteam.common.HealthCheckRequest) returns (redteam.common.HealthCheckResponse);
+}
+
+// ============================================================================
+// Token 校验
+// ============================================================================
+
+message ValidateTokenRequest {
+  // 待校验的 accessToken
+  string access_token = 1;
+  // 租户 ID
+  string tenant_id = 2;
+}
+
+message ValidateTokenResponse {
+  // 校验结果
+  bool valid = 1;
+  // 用户 ID
+  string user_id = 2;
+  // 用户名
+  string username = 3;
+  // 用户显示名
+  string display_name = 4;
+  // 角色编码列表
+  repeated string roles = 5;
+  // 权限编码列表
+  repeated string permissions = 6;
+  // Token 过期时间（毫秒时间戳）
+  int64 expire_at = 7;
+  // 失败时的错误码（valid=false 时有效）
+  int32 error_code = 8;
+  // 失败时的错误消息
+  string error_message = 9;
+}
+
+// ============================================================================
+// 用户信息查询
+// ============================================================================
+
+message GetUserRequest {
+  // 用户 ID
+  string user_id = 1;
+  // 请求上下文（用于权限校验）
+  redteam.common.RequestContext context = 2;
+}
+
+message GetUserByNameRequest {
+  // 用户名
+  string username = 1;
+  // 请求上下文
+  redteam.common.RequestContext context = 2;
+}
+
+message GetUserResponse {
+  // 用户 ID
+  string user_id = 1;
+  // 用户名
+  string username = 2;
+  // 显示名
+  string display_name = 3;
+  // 邮箱
+  string email = 4;
+  // 手机号
+  string phone = 5;
+  // 头像 URL
+  string avatar = 6;
+  // 账号状态：ACTIVE / DISABLED / LOCKED
+  string status = 7;
+  // 所属部门 ID
+  string department_id = 8;
+  // 角色列表
+  repeated RoleInfo roles = 9;
+  // 创建时间（毫秒时间戳）
+  int64 created_at = 10;
+  // 最近登录时间（毫秒时间戳）
+  int64 last_login_at = 11;
+}
+
+message RoleInfo {
+  // 角色 ID
+  string role_id = 1;
+  // 角色编码
+  string role_code = 2;
+  // 角色名称
+  string role_name = 3;
+  // 权限列表
+  repeated PermissionInfo permissions = 4;
+}
+
+message PermissionInfo {
+  // 权限 ID
+  string permission_id = 1;
+  // 权限编码
+  string permission_code = 2;
+  // 权限名称
+  string permission_name = 3;
+  // 资源类型
+  string resource_type = 4;
+  // 操作类型：CREATE / READ / UPDATE / DELETE / EXPORT / SHARE
+  string action = 5;
+}
+
+// ============================================================================
+// 权限 / 角色校验
+// ============================================================================
+
+message CheckPermissionRequest {
+  // 用户 ID
+  string user_id = 1;
+  // 权限编码
+  string permission_code = 2;
+  // 资源类型（可选）
+  string resource_type = 3;
+  // 资源 ID（可选，用于数据级权限）
+  string resource_id = 4;
+}
+
+message CheckPermissionResponse {
+  // 是否有权限
+  bool allowed = 1;
+  // 拒绝原因（allowed=false 时有效）
+  string reason = 2;
+}
+
+message CheckRoleRequest {
+  // 用户 ID
+  string user_id = 1;
+  // 角色编码列表（满足其一即可）
+  repeated string role_codes = 2;
+}
+
+message CheckRoleResponse {
+  // 是否有角色
+  bool allowed = 1;
+  // 拒绝原因
+  string reason = 2;
+}
+
+// ============================================================================
+// Token 注销
+// ============================================================================
+
+message RevokeTokenRequest {
+  // 待注销的 accessToken
+  string access_token = 1;
+  // 操作人用户 ID
+  string operator_id = 2;
+  // 注销原因
+  string reason = 3;
+}

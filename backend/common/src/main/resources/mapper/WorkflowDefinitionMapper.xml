@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.redteam.common.mapper.WorkflowDefinitionMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="WorkflowDefinitionResultMap" type="com.redteam.common.entity.WorkflowDefinitionEntity">
+        <id     column="id"               property="id"/>
+        <result column="name"             property="name"/>
+        <result column="description"      property="description"/>
+        <result column="business_type"    property="businessType"/>
+        <result column="nodes_json"       property="nodesJson"/>
+        <result column="edges_json"       property="edgesJson"/>
+        <result column="created_by"       property="createdBy"/>
+        <result column="created_by_name"  property="createdByName"/>
+        <result column="enabled"          property="enabled"/>
+        <result column="version"          property="version"/>
+        <result column="created_at"       property="createdAt"/>
+        <result column="updated_at"       property="updatedAt"/>
+    </resultMap>
+
+    <!-- 公共字段列 -->
+    <sql id="Base_Column_List">
+        id, name, description, business_type, nodes_json, edges_json,
+        created_by, created_by_name, enabled, version, created_at, updated_at
+    </sql>
+
+    <!-- 按业务类型查询工作流定义列表（按版本号倒序） -->
+    <select id="selectByBusinessType" resultMap="WorkflowDefinitionResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM workflow_definition
+        WHERE business_type = #{businessType}
+        ORDER BY version DESC, id DESC
+    </select>
+
+    <!-- 按启用状态查询工作流定义列表 -->
+    <select id="selectEnabled" resultMap="WorkflowDefinitionResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM workflow_definition
+        WHERE enabled = #{enabled}
+        ORDER BY id DESC
+    </select>
+
+</mapper>

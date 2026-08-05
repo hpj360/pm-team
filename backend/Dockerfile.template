@@ -1,0 +1,86 @@
+# =============================================================================
+# 通用后端服务 Dockerfile 模板
+# 各微服务通过构建参数复用此模板
+#
+# 构建示例 (PowerShell):
+#   docker build `
+#     --build-arg SERVICE_NAME=upload-service `
+#     --build-arg SERVICE_PORT=8081 `
+#     -t redteam/upload-service:latest `
+#     -f backend/Dockerfile.template `
+#     backend/upload-service
+#
+# 构建示例 (Bash):
+#   docker build \
+#     --build-arg SERVICE_NAME=upload-service \
+#     --build-arg SERVICE_PORT=8081 \
+#     -t redteam/upload-service:latest \
+#     -f backend/Dockerfile.template \
+#     backend/upload-service
+# =============================================================================
+# ---------- Stage 1: Build ----------
+FROM maven:3.9-eclipse-temurin-17 AS builder
+LABEL stage=builder
+
+# 构建参数
+ARG SERVICE_NAME=auth-service
+ARG MAVEN_OPTS="-B"
+
+WORKDIR /build
+
+# 复制源码 (依赖缓存可由 BuildKit 缓存挂载优化)
+COPY pom.xml ./
+COPY src ./src
+
+# 构建 fat-jar, 跳过测试 (CI 已单独执行)
+RUN mvn $MAVEN_OPTS clean package -Dmaven.test.skip=true \
+    -Dmaven.javadoc.skip=true
+
+# ---------- Stage 2: Runtime ----------
+FROM eclipse-temurin:17-jre
+
+ARG SERVICE_NAME=auth-service
+ARG SERVICE_PORT=8080
+
+LABEL org.opencontainers.image.title="redteam-${SERVICE_NAME}" \
+      org.opencontainers.image.description="红方文件汇聚平台 - ${SERVICE_NAME}" \
+      org.opencontainers.image.source="https://github.com/redteam/pm-team"
+
+# 安装运维工具 + 设置时区
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl tzdata dumb-init \
+    && rm -rf /var/lib/apt/lists/* \
+    && ln -snf /usr/share/zoneinfo/Asia/Shanghai /etc/localtime \
+    && echo "Asia/Shanghai" > /etc/timezone
+
+# 非 root 用户
+RUN groupadd -r app && useradd -r -g app -d /home/app -m app
+
+WORKDIR /app
+
+# 复制构建产物
+COPY --from=builder /build/target/*.jar /app/app.jar
+
+RUN mkdir -p /app/logs && chown -R app:app /app
+
+USER app
+
+EXPOSE ${SERVICE_PORT}
+
+# JVM 参数
+ENV JAVA_OPTS="-XX:+UseContainerSupport \
+    -XX:MaxRAMPercentage=75.0 \
+    -XX:+UseG1GC \
+    -XX:MaxGCPauseMillis=200 \
+    -Djava.security.egd=file:/dev/./urandom \
+    -Dfile.encoding=UTF-8 \
+    -Duser.timezone=Asia/Shanghai" \
+    SPRING_PROFILES_ACTIVE=prod \
+    SERVER_PORT=${SERVICE_PORT}
+
+# 健康检查
+HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
+    CMD curl -fs http://localhost:${SERVER_PORT}/actuator/health || exit 1
+
+ENTRYPOINT ["dumb-init", "--"]
+CMD ["sh", "-c", "exec java $JAVA_OPTS -jar /app/app.jar"]

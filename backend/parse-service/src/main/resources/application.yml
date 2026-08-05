@@ -59,6 +59,37 @@ knife4j:
   setting:
     language: zh_cn
 
+# 解析服务业务配置
+redteam:
+  parse:
+    # 最大提取字符数（默认 1MB）
+    max-text-length: 1048576
+    # Tika 解析超时（秒，仅作为监控指标）
+    tika-timeout-seconds: 60
+    # 本地临时目录
+    temp-dir: /tmp/parse-temp
+    yara:
+      # yara CLI 路径
+      cli-path: /usr/bin/yara
+      # 编译产物缓存目录
+      rules-dir: /tmp/yara-rules
+      # 是否启用 YARA 扫描
+      enabled: true
+    ner:
+      # security-BERT 模型本地路径
+      model-path: models/security-bert
+      # 是否使用正则兜底（模型加载失败自动启用）
+      use-regex-fallback: true
+      # 缓存 TTL（秒）
+      cache-ttl-seconds: 3600
+      # 置信度阈值
+      confidence-threshold: 0.7
+  kafka:
+    bootstrap-servers: localhost:9092
+    topic:
+      file-events: redteam.file.events
+      parse-events: redteam.parse.events
+
 # 日志配置
 logging:
   level:

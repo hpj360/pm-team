@@ -64,6 +64,36 @@ knife4j:
   setting:
     language: zh_cn
 
+# 检索服务配置（v2.5 新增）
+redteam:
+  search:
+    es:
+      index-name: redhead-files
+      shards: 3
+      replicas: 1
+    milvus:
+      host: ${MILVUS_HOST:localhost}
+      port: ${MILVUS_PORT:19530}
+      collection-name: file_vectors
+      vector-dim: 768
+      index-type: IVF_FLAT
+      metric-type: COSINE
+      nlist: 1024
+      nprobe: 16
+    embedding:
+      api-url: ${EMBEDDING_API_URL:http://localhost:8081/embed}
+      timeout-seconds: 10
+      cache-enabled: true
+    hybrid:
+      rrf-k: 60
+      top-k-per-source: 50
+    cache:
+      ttl-seconds: 300
+  kafka:
+    topic:
+      parse-events: redteam.parse.events
+      search-events: redteam.search.events
+
 # 日志配置
 logging:
   level:

@@ -13,7 +13,7 @@ import org.springframework.kafka.annotation.EnableKafka;
  */
 @SpringBootApplication
 @EnableKafka
-@MapperScan("com.redteam.search.mapper")
+@MapperScan({"com.redteam.search.mapper", "com.redteam.common.mapper"})
 @ComponentScan(basePackages = {"com.redteam.common", "com.redteam.search"})
 public class SearchServiceApplication {
 

@@ -66,4 +66,25 @@ public class UserEntity extends BaseEntity {
      * 最后登录IP
      */
     private String lastLoginIp;
+
+    /**
+     * 是否启用 MFA 多因素认证（v2.3 新增）
+     */
+    private Boolean mfaEnabled;
+
+    /**
+     * MFA 密钥（SM4 加密后存储，v2.3 新增）
+     */
+    private String mfaSecret;
+
+    /**
+     * 密码最后更新时间（v2.3 新增）
+     */
+    private java.time.LocalDateTime passwordUpdatedAt;
+
+    /**
+     * 许可等级 1-4（v4.2.3 新增）
+     * 1-PUBLIC 2-INTERNAL 3-CONFIDENTIAL 4-SECRET 99-管理员
+     */
+    private Integer clearanceLevel;
 }

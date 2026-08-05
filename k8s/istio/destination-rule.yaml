@@ -1,0 +1,100 @@
+---
+# =============================================================================
+# Istio DestinationRule - 目标规则
+# 定义服务版本子集 / 负载均衡 / 熔断 / 连接池 / 异常检测
+# =============================================================================
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: auth-service-dr
+  namespace: redteam-platform
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+spec:
+  host: auth-service
+  # 流量策略 (全局)
+  trafficPolicy:
+    # 负载均衡: 最少连接
+    loadBalancer:
+      simple: LEAST_REQUEST
+    # 连接池
+    connectionPool:
+      tcp:
+        maxConnections: 100
+        connectTimeout: 10s
+        tcpKeepalive:
+          time: 60s
+          interval: 15s
+      http:
+        http2MaxRequests: 1000
+        maxRequestsPerConnection: 10
+        maxRetries: 3
+        idleTimeout: 60s
+        h2UpgradePolicy: UPGRADE
+    # 熔断 (异常检测)
+    outlierDetection:
+      consecutive5xxErrors: 5
+      interval: 30s
+      baseEjectionTime: 60s
+      maxEjectionPercent: 50
+      minHealthPercent: 50
+    # TLS (服务间 mTLS)
+    tls:
+      mode: ISTIO_MUTUAL
+  # 版本子集
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+      trafficPolicy:
+        connectionPool:
+          tcp:
+            maxConnections: 100
+          http:
+            http2MaxRequests: 1000
+    - name: v2
+      labels:
+        version: v2
+      trafficPolicy:
+        connectionPool:
+          tcp:
+            maxConnections: 50
+          http:
+            http2MaxRequests: 500
+---
+# =============================================================================
+# 前端 DestinationRule
+# =============================================================================
+apiVersion: networking.istio.io/v1beta1
+kind: DestinationRule
+metadata:
+  name: frontend-dr
+  namespace: redteam-platform
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+spec:
+  host: frontend
+  trafficPolicy:
+    loadBalancer:
+      simple: ROUND_ROBIN
+    connectionPool:
+      tcp:
+        maxConnections: 200
+        connectTimeout: 5s
+      http:
+        http2MaxRequests: 500
+        idleTimeout: 60s
+    outlierDetection:
+      consecutive5xxErrors: 3
+      interval: 30s
+      baseEjectionTime: 30s
+      maxEjectionPercent: 50
+    tls:
+      mode: ISTIO_MUTUAL
+  subsets:
+    - name: v1
+      labels:
+        version: v1
+    - name: v2
+      labels:
+        version: v2

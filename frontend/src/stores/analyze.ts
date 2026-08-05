@@ -3,7 +3,7 @@
  */
 
 import { create } from 'zustand';
-import type { AnalyzeTask, AnalyzeResult, AnalyzeType, AnalyzeStatus } from '@/types';
+import type { AnalyzeTask, AnalyzeResult } from '@/types';
 
 interface AnalyzeState {
   // 状态

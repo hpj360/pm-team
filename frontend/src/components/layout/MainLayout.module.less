@@ -6,6 +6,26 @@
   min-height: 100vh;
 }
 
+.skipLink {
+  position: absolute;
+  top: -40px;
+  left: 0;
+  z-index: 9999;
+  padding: 8px 16px;
+  background: #1890ff;
+  color: #fff;
+  font-size: 14px;
+  text-decoration: none;
+  border-radius: 0 0 4px 0;
+  transition: top 0.2s ease;
+}
+
+.skipLink:focus {
+  top: 0;
+  outline: 2px solid #fff;
+  outline-offset: 2px;
+}
+
 .sider {
   box-shadow: 2px 0 8px rgba(0, 0, 0, 0.15);
   z-index: 10;
@@ -52,11 +72,18 @@
   font-size: 18px;
   padding: 0 12px;
   cursor: pointer;
-  transition: color 0.3s;
+  transition: color var(--motion-duration-fast) var(--motion-easing);
 }
 
 .trigger:hover {
-  color: #1890ff;
+  color: var(--color-primary-500);
+}
+
+.iconBtn {
+  font-size: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .headerRight {

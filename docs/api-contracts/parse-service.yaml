@@ -1,0 +1,376 @@
+openapi: 3.0.3
+info:
+  title: 红方文件汇聚平台 - 文件解析服务 API
+  description: |
+    文件解析服务，提供文档/图片/二进制文件的结构化解析与提取能力。
+
+    - 服务端口：8082
+    - API 前缀：/api/v1
+    - 认证方式：Bearer JWT
+    - 限流策略：500 QPS / 租户
+    - 解析引擎：Apache Tika + OCR + 自研二进制解析器
+  version: 1.0.0
+  contact:
+    name: 红方团队
+    email: redteam@example.com
+
+servers:
+  - url: http://localhost:8082
+    description: 本地开发环境
+  - url: https://api.redteam.internal/parse
+    description: 生产环境
+
+tags:
+  - name: 文件解析
+    description: 触发解析、查询状态与结果
+
+paths:
+  /api/v1/parse/{fileId}:
+    post:
+      tags: [文件解析]
+      summary: 触发文件解析
+      description: |
+        异步触发文件解析任务，立即返回任务 ID。
+        支持的解析类型：TEXT（纯文本）、OCR（图片识别）、STRUCTURED（结构化）、BINARY（二进制）。
+      operationId: parseFile
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                parse_type:
+                  type: string
+                  enum: [AUTO, TEXT, OCR, STRUCTURED, BINARY]
+                  default: AUTO
+                  description: 解析类型，AUTO 自动识别
+                ocr_language:
+                  type: string
+                  description: OCR 语言（如 chi_sim+eng）
+                  default: chi_sim+eng
+                extract_images:
+                  type: boolean
+                  description: 是否提取图片
+                  default: true
+                extract_metadata:
+                  type: boolean
+                  description: 是否提取元数据
+                  default: true
+                max_text_length:
+                  type: integer
+                  description: 文本最大长度（字符），超过截断
+                  default: 1000000
+                priority:
+                  type: string
+                  enum: [LOW, NORMAL, HIGH, URGENT]
+                  default: NORMAL
+      responses:
+        '200':
+          description: 任务已触发
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          task_id:
+                            type: string
+                            description: 解析任务 ID
+                          file_id:
+                            type: string
+                          status:
+                            type: string
+                            enum: [PENDING, RUNNING]
+                          estimated_duration_ms:
+                            type: integer
+                            description: 预计耗时（毫秒）
+        '404':
+          description: 文件不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+              example:
+                code: 20001
+                message: 文件不存在
+                data: null
+                timestamp: 1785086825000
+        '409':
+          description: 文件正在解析中
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+              example:
+                code: 30001
+                message: 文件正在解析中，请勿重复触发
+                data: null
+                timestamp: 1785086825000
+
+  /api/v1/parse/{fileId}/status:
+    get:
+      tags: [文件解析]
+      summary: 查询解析状态
+      operationId: getParseStatus
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ParseStatus'
+
+  /api/v1/parse/{fileId}/result:
+    get:
+      tags: [文件解析]
+      summary: 获取解析结果
+      description: 获取文件解析后的结构化结果，包括文本、元数据、图片列表。
+      operationId: getParseResult
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+        - name: includeImages
+          in: query
+          description: 是否包含图片 URL
+          schema:
+            type: boolean
+            default: true
+        - name: textFormat
+          in: query
+          description: 文本格式
+          schema:
+            type: string
+            enum: [PLAIN, MARKDOWN, HTML]
+            default: PLAIN
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/ParseResult'
+        '404':
+          description: 解析结果不存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+              example:
+                code: 30002
+                message: 解析任务不存在
+                data: null
+                timestamp: 1785086825000
+
+  /api/v1/parse/batch:
+    post:
+      tags: [文件解析]
+      summary: 批量解析
+      description: 批量触发文件解析，单次最多 50 个文件。
+      operationId: batchParse
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: 文件 ID 列表（最多 50 个）
+                parse_type:
+                  type: string
+                  enum: [AUTO, TEXT, OCR, STRUCTURED, BINARY]
+                  default: AUTO
+                priority:
+                  type: string
+                  enum: [LOW, NORMAL, HIGH, URGENT]
+                  default: NORMAL
+              required: [file_ids]
+      responses:
+        '200':
+          description: 批量任务已触发
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          batch_id:
+                            type: string
+                            description: 批次 ID
+                          tasks:
+                            type: array
+                            items:
+                              type: object
+                              properties:
+                                file_id:
+                                  type: string
+                                task_id:
+                                  type: string
+                                status:
+                                  type: string
+                          success_count:
+                            type: integer
+                          failed_count:
+                            type: integer
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    FileIdPath:
+      name: fileId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: 参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+
+  schemas:
+    ApiResult:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          nullable: true
+        timestamp:
+          type: integer
+          format: int64
+      required: [code, message, timestamp]
+
+    ParseStatus:
+      type: object
+      description: 解析状态
+      properties:
+        file_id:
+          type: string
+        task_id:
+          type: string
+        status:
+          type: string
+          enum: [PENDING, RUNNING, SUCCESS, FAILED, CANCELLED]
+          description: 解析状态
+        parse_type:
+          type: string
+          description: 实际使用的解析类型
+        progress:
+          type: integer
+          description: 进度百分比（0-100）
+        started_at:
+          type: integer
+          format: int64
+        completed_at:
+          type: integer
+          format: int64
+        duration_ms:
+          type: integer
+          description: 耗时（毫秒）
+        error_message:
+          type: string
+          description: 失败原因
+
+    ParseResult:
+      type: object
+      description: 解析结果
+      properties:
+        file_id:
+          type: string
+        task_id:
+          type: string
+        parse_type:
+          type: string
+          enum: [TEXT, OCR, STRUCTURED, BINARY]
+        text_content:
+          type: string
+          description: 提取的文本内容
+        text_length:
+          type: integer
+          description: 文本长度
+        truncated:
+          type: boolean
+          description: 文本是否被截断
+        metadata:
+          type: object
+          description: 文件元数据（key-value）
+          additionalProperties:
+            type: string
+          example:
+            title: 文档标题
+            author: 作者
+            created: 2026-01-01
+        images:
+          type: array
+          description: 提取的图片 URL 列表
+          items:
+            type: object
+            properties:
+              image_id:
+                type: string
+              url:
+                type: string
+              width:
+                type: integer
+              height:
+                type: integer
+              page:
+                type: integer
+                description: 所在页码
+        language:
+          type: string
+          description: 检测到的文本语言
+          example: zh-CN
+        encoding:
+          type: string
+          description: 文本编码
+          example: UTF-8
+        parsed_at:
+          type: integer
+          format: int64
+          description: 解析完成时间
+        duration_ms:
+          type: integer

@@ -11,19 +11,8 @@ import type {
   AnalyzeStatistics,
   AnalyzeType,
   AnalyzeStatus,
-  IocType,
 } from '@/types';
 import { AnalyzeStatus as AS, AnalyzeType as AT, IocType as IT } from '@/types';
-
-// 分析类型映射
-const analyzeTypeNames: Record<AnalyzeType, string> = {
-  [AT.CONTENT]: '内容分析',
-  [AT.MALWARE]: '恶意软件分析',
-  [AT.NETWORK]: '网络行为分析',
-  [AT.CRYPTO]: '加密分析',
-  [AT.METADATA]: '元数据分析',
-  [AT.IOC]: 'IOC提取',
-};
 
 /**
  * 生成Mock IOC信息

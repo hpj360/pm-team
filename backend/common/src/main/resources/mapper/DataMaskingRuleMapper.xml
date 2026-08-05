@@ -1,0 +1,43 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.redteam.common.mapper.DataMaskingRuleMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="DataMaskingRuleResultMap" type="com.redteam.common.entity.DataMaskingRuleEntity">
+        <id     column="id"                   property="id"/>
+        <result column="rule_name"            property="ruleName"/>
+        <result column="rule_type"            property="ruleType"/>
+        <result column="pattern"              property="pattern"/>
+        <result column="replacement"          property="replacement"/>
+        <result column="classification_level" property="classificationLevel"/>
+        <result column="enabled"              property="enabled"/>
+        <result column="description"          property="description"/>
+        <result column="created_at"           property="createdAt"/>
+        <result column="updated_at"           property="updatedAt"/>
+    </resultMap>
+
+    <!-- 公共字段列 -->
+    <sql id="Base_Column_List">
+        id, rule_name, rule_type, pattern, replacement, classification_level,
+        enabled, description, created_at, updated_at
+    </sql>
+
+    <!-- 按密级查询脱敏规则（含禁用） -->
+    <select id="selectByClassificationLevel" resultMap="DataMaskingRuleResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM data_masking_rule
+        WHERE classification_level = #{level}
+        ORDER BY id ASC
+    </select>
+
+    <!-- 按密级查询启用的脱敏规则 -->
+    <select id="selectEnabledByClassificationLevel" resultMap="DataMaskingRuleResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM data_masking_rule
+        WHERE classification_level = #{level}
+          AND enabled = 1
+        ORDER BY id ASC
+    </select>
+
+</mapper>

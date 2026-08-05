@@ -1,0 +1,230 @@
+---
+# =============================================================================
+# auth-service K8s 部署配置
+# 包含: Deployment + Service + HPA + PodDisruptionBudget
+# 其他微服务 (upload/parse/search/analyze/profile/task/notification/report/feishu)
+# 可参考此模板, 修改 name / port / resources / 副本数即可
+# =============================================================================
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: auth-service
+  namespace: redteam-platform
+  labels:
+    app.kubernetes.io/name: auth-service
+    app.kubernetes.io/part-of: redteam-platform
+    app.kubernetes.io/version: "1.0.0"
+    app: auth-service
+    version: v1
+spec:
+  replicas: 2
+  revisionHistoryLimit: 10
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: auth-service
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: auth-service
+        app.kubernetes.io/part-of: redteam-platform
+        app: auth-service
+        version: v1
+      annotations:
+        # Istio 投递/日志侧车
+        sidecar.istio.io/proxyCPU: "100m"
+        sidecar.istio.io/proxyMemory: "128Mi"
+        # Prometheus 抓取
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+        # 配置变更自动重启
+        checksum/config: "REPLACE_WITH_CONFIGMAP_HASH"
+    spec:
+      serviceAccountName: redteam-sa
+      terminationGracePeriodSeconds: 60
+      affinity:
+        podAntiAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              podAffinityTerm:
+                labelSelector:
+                  matchExpressions:
+                    - key: app.kubernetes.io/name
+                      operator: In
+                      values:
+                        - auth-service
+                topologyKey: kubernetes.io/hostname
+      containers:
+        - name: auth-service
+          image: registry.example.com/redteam/auth-service:1.0.0
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: redteam-common-config
+            - secretRef:
+                name: redteam-common-secret
+            - secretRef:
+                name: auth-service-secret
+          env:
+            - name: POD_NAME
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.name
+            - name: POD_NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: SERVER_PORT
+              value: "8080"
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "512Mi"
+            limits:
+              cpu: "1000m"
+              memory: "1Gi"
+          # 启动探针 (Spring Boot 3 Actuator)
+          startupProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 12
+          # 存活探针
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: http
+            initialDelaySeconds: 0
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 3
+          # 就绪探针
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: http
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 5
+            failureThreshold: 3
+            successThreshold: 1
+          # 生命周期钩子
+          lifecycle:
+            preStop:
+              exec:
+                command:
+                  - sh
+                  - -c
+                  - "sleep 15 && curl -fs http://localhost:8080/actuator/shutdown || true"
+          volumeMounts:
+            - name: logs
+              mountPath: /app/logs
+            - name: tz
+              mountPath: /etc/localtime
+              readOnly: true
+            # Istio 透明注入, 无需显式挂载
+      volumes:
+        - name: logs
+          emptyDir: {}
+        - name: tz
+          hostPath:
+            path: /usr/share/zoneinfo/Asia/Shanghai
+            type: File
+      # 镜像拉取凭证 (生产环境用 ImagePullSecret)
+      imagePullSecrets:
+        - name: registry-credentials
+---
+# Service (ClusterIP, 集群内访问)
+apiVersion: v1
+kind: Service
+metadata:
+  name: auth-service
+  namespace: redteam-platform
+  labels:
+    app.kubernetes.io/name: auth-service
+    app.kubernetes.io/part-of: redteam-platform
+    app: auth-service
+    service.istio.io/canonical-name: auth-service
+    service.istio.io/canonical-revision: v1
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 8080
+      targetPort: http
+      protocol: TCP
+  selector:
+    app.kubernetes.io/name: auth-service
+---
+# HPA: CPU > 70% 或内存 > 80% 自动扩缩
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: auth-service-hpa
+  namespace: redteam-platform
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: auth-service
+  minReplicas: 2
+  maxReplicas: 8
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 70
+    - type: Resource
+      resource:
+        name: memory
+        target:
+          type: Utilization
+          averageUtilization: 80
+  behavior:
+    scaleUp:
+      stabilizationWindowSeconds: 60
+      policies:
+        - type: Pods
+          value: 2
+          periodSeconds: 60
+    scaleDown:
+      stabilizationWindowSeconds: 300
+      policies:
+        - type: Pods
+          value: 1
+          periodSeconds: 60
+---
+# PodDisruptionBudget: 滚动/维护时保证最少 1 个可用
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: auth-service-pdb
+  namespace: redteam-platform
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: auth-service
+---
+# ServiceAccount
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: redteam-sa
+  namespace: redteam-platform
+  annotations:
+    iam.gke.io/gcp-service-account: redteam-platform@project.iam.gserviceaccount.com

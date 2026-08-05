@@ -1,0 +1,132 @@
+---
+# =============================================================================
+# Istio VirtualService - 虚拟服务
+# 功能: 流量路由 / 灰度发布 / 重试 / 超时 / 故障注入
+# 灰度: v1 90% (稳定) + v2 10% (金丝雀)
+# =============================================================================
+# 前端对外虚拟服务 (绑定 Gateway)
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: frontend-vs
+  namespace: redteam-platform
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+spec:
+  hosts:
+    - "redteam.example.com"
+  gateways:
+    - redteam-gateway
+  http:
+    # 静态资源路由到前端
+    - name: frontend-static
+      match:
+        - uri:
+            prefix: "/static/"
+        - uri:
+            prefix: "/assets/"
+        - uri:
+            regex: '^.*\.(css|js|png|jpg|jpeg|gif|svg|woff2?|ttf|eot|ico)$'
+      route:
+        - destination:
+            host: frontend
+            subset: v1
+          weight: 90
+        - destination:
+            host: frontend
+            subset: v2
+          weight: 10
+      headers:
+        response:
+          set:
+            Cache-Control: "public, max-age=2592000"
+    # API 路由到网关 -> 各微服务
+    - name: api-route
+      match:
+        - uri:
+            prefix: "/api/"
+      route:
+        - destination:
+            host: gateway
+            port:
+              number: 8080
+      # 重试策略
+      retries:
+        attempts: 3
+        perTryTimeout: 10s
+        retryOn: "connect-failure,refused-stream,unavailable,cancelled,retriable-status-codes"
+        retryRemoteLocalities: true
+      timeout: 30s
+    # WebSocket (通知服务)
+    - name: websocket-route
+      match:
+        - uri:
+            prefix: "/ws/"
+      route:
+        - destination:
+            host: gateway
+            port:
+              number: 8080
+      timeout: 0s
+    # 默认路由到前端 (SPA)
+    - name: frontend-default
+      route:
+        - destination:
+            host: frontend
+            subset: v1
+          weight: 90
+        - destination:
+            host: frontend
+            subset: v2
+          weight: 10
+---
+# =============================================================================
+# auth-service 内部虚拟服务 (集群内灰度, 不绑定 Gateway)
+# =============================================================================
+apiVersion: networking.istio.io/v1beta1
+kind: VirtualService
+metadata:
+  name: auth-service-vs
+  namespace: redteam-platform
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+spec:
+  hosts:
+    - auth-service
+  http:
+    - name: auth-canary
+      # 按请求头灰度 (内部用户/灰度测试)
+      match:
+        - headers:
+            x-canary:
+              exact: "true"
+      route:
+        - destination:
+            host: auth-service
+            subset: v2
+      timeout: 10s
+      retries:
+        attempts: 2
+        perTryTimeout: 5s
+    # 默认流量: v1 90% + v2 10%
+    - name: auth-default
+      route:
+        - destination:
+            host: auth-service
+            subset: v1
+          weight: 90
+        - destination:
+            host: auth-service
+            subset: v2
+          weight: 10
+      timeout: 10s
+      retries:
+        attempts: 3
+        perTryTimeout: 5s
+        retryOn: "connect-failure,refused-stream,unavailable,reset"
+      # 故障注入 (压测时可启用)
+      # fault:
+      #   delay:
+      #     percentage:
+      #       value: 10
+      #     fixedDelay: 2s

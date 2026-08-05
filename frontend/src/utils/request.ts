@@ -61,6 +61,9 @@ service.interceptors.request.use(
 );
 
 // 响应拦截器
+// 注意：拦截器返回 ApiResponse 而非 AxiosResponse，由外层 get/post 等封装函数
+// 通过类型断言将结果映射为 ApiResponse<T>。此处使用 as unknown as AxiosResponse
+// 以满足 axios 拦截器的类型签名约束。
 service.interceptors.response.use(
   (response: AxiosResponse) => {
     const config = response.config;
@@ -71,7 +74,7 @@ service.interceptors.response.use(
 
     // 根据后端返回的状态码处理
     if (res.code === 200 || res.code === 0) {
-      return res;
+      return res as unknown as AxiosResponse;
     }
 
     // Token过期或无效
@@ -98,6 +101,10 @@ service.interceptors.response.use(
       const requestKey = generateRequestKey(config);
       requestQueue.delete(requestKey);
     }
+
+    // /auth/* 请求失败时静默,由调用方(services/auth.ts)做 Mock 降级处理
+    const url = config?.url || '';
+    const isAuthRequest = url.startsWith('/auth');
 
     let errorMessage = '网络错误，请稍后重试';
 
@@ -134,7 +141,9 @@ service.interceptors.response.use(
       errorMessage = '网络连接失败，请检查网络';
     }
 
-    message.error(errorMessage);
+    if (!isAuthRequest) {
+      message.error(errorMessage);
+    }
     return Promise.reject(error);
   }
 );

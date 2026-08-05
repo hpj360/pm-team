@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  红方文件分析管理平台 - 统一日志配置 (v5.4)
+  ==========================================
+  默认输出结构化 JSON 日志（LogstashEncoder），字段约定见 LogFieldConstants：
+    @timestamp / level / traceId / spanId / service / msg / logger / thread / fields
+  traceId/spanId 由 TraceContextPropagator 写入 MDC，service 由 UnifiedLogConfig + customFields 提供。
+
+  切换为文本日志：设置 redteam.telemetry.log.appender=CONSOLE_PATTERN
+  输出文件：设置 redteam.telemetry.log.file.enabled=true
+  ==========================================
+-->
+<configuration>
+
+    <!-- 服务名（供 JSON customFields 与文本 pattern 使用） -->
+    <springProperty name="APP_NAME" source="spring.application.name" defaultValue="redteam-service"/>
+    <!-- 日志 appender 选择：CONSOLE_JSON（默认）或 CONSOLE_PATTERN -->
+    <springProperty name="LOG_APPENDER" source="redteam.telemetry.log.appender" defaultValue="CONSOLE_JSON"/>
+    <!-- 日志根级别 -->
+    <springProperty name="LOG_ROOT_LEVEL" source="logging.level.root" defaultValue="INFO"/>
+    <!-- 是否启用文件输出 -->
+    <springProperty name="LOG_FILE_ENABLED" source="redteam.telemetry.log.file.enabled" defaultValue="false"/>
+    <springProperty name="LOG_FILE_PATH" source="redteam.telemetry.log.file.path" defaultValue="logs/${APP_NAME}.log"/>
+
+    <!-- ========== JSON 控制台 Appender ========== -->
+    <appender name="CONSOLE_JSON" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <fieldNames>
+                <timestamp>@timestamp</timestamp>
+                <message>msg</message>
+                <logger>logger</logger>
+                <thread>thread</thread>
+                <level>level</level>
+                <!-- 忽略无用字段 -->
+                <version>[ignore]</version>
+                <levelValue>[ignore]</levelValue>
+            </fieldNames>
+            <!-- 静态服务名字段（始终存在） -->
+            <customFields>{"service":"${APP_NAME}"}</customFields>
+            <!-- MDC 中需包含的字段：traceId / spanId（service 由 customFields 兜底，MDC 同名覆盖同值） -->
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+            <includeMdcKeyName>service</includeMdcKeyName>
+            <throwableConverter class="net.logstash.logback.stacktrace.ShortenedThrowableConverter">
+                <maxDepthPerThrowable>30</maxDepthPerThrowable>
+                <maxLength>4096</maxLength>
+            </throwableConverter>
+        </encoder>
+    </appender>
+
+    <!-- ========== 文本控制台 Appender（回退/调试用） ========== -->
+    <appender name="CONSOLE_PATTERN" class="ch.qos.logback.core.ConsoleAppender">
+        <encoder>
+            <pattern>%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level [%X{traceId:-},%X{spanId:-}] [%X{service:-${APP_NAME}}] %logger{50} - %msg%n</pattern>
+            <charset>UTF-8</charset>
+        </encoder>
+    </appender>
+
+    <!-- ========== 滚动文件 Appender（可选，通过 profile=file-logging 启用） ========== -->
+    <appender name="FILE_JSON" class="ch.qos.logback.core.rolling.RollingFileAppender">
+        <file>${LOG_FILE_PATH}</file>
+        <rollingPolicy class="ch.qos.logback.core.rolling.SizeAndTimeBasedRollingPolicy">
+            <fileNamePattern>${LOG_FILE_PATH}.%d{yyyy-MM-dd}.%i.gz</fileNamePattern>
+            <maxFileSize>100MB</maxFileSize>
+            <maxHistory>30</maxHistory>
+            <totalSizeCap>10GB</totalSizeCap>
+        </rollingPolicy>
+        <encoder class="net.logstash.logback.encoder.LogstashEncoder">
+            <fieldNames>
+                <timestamp>@timestamp</timestamp>
+                <message>msg</message>
+                <level>level</level>
+            </fieldNames>
+            <customFields>{"service":"${APP_NAME}"}</customFields>
+            <includeMdcKeyName>traceId</includeMdcKeyName>
+            <includeMdcKeyName>spanId</includeMdcKeyName>
+        </encoder>
+    </appender>
+
+    <!-- ========== 业务包日志级别 ========== -->
+    <logger name="com.redteam" level="${LOG_ROOT_LEVEL}"/>
+    <logger name="org.springframework.web" level="INFO"/>
+    <logger name="org.springframework.security" level="INFO"/>
+    <logger name="io.opentelemetry" level="WARN"/>
+    <logger name="io.micrometer" level="INFO"/>
+
+    <!-- ========== 开发环境：使用文本控制台便于本地调试 ========== -->
+    <springProfile name="dev,local">
+        <root level="${LOG_ROOT_LEVEL}">
+            <appender-ref ref="CONSOLE_PATTERN"/>
+        </root>
+    </springProfile>
+
+    <!-- ========== 文件日志环境：JSON 控制台 + 滚动文件（spring.profiles.active 含 file-logging） ========== -->
+    <springProfile name="file-logging">
+        <root level="${LOG_ROOT_LEVEL}">
+            <appender-ref ref="${LOG_APPENDER}"/>
+            <appender-ref ref="FILE_JSON"/>
+        </root>
+    </springProfile>
+
+    <!-- ========== 默认（生产）：JSON 控制台 ========== -->
+    <springProfile name="!dev,local &amp; !file-logging">
+        <root level="${LOG_ROOT_LEVEL}">
+            <appender-ref ref="${LOG_APPENDER}"/>
+        </root>
+    </springProfile>
+
+</configuration>

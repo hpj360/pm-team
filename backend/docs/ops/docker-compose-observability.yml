@@ -1,0 +1,150 @@
+# ==========================================
+# 红方文件分析管理平台 - 可观测性栈编排 (v5.4)
+# ==========================================
+# 一键拉起可观测性后端：Prometheus + Grafana + Jaeger + OTel Collector + Loki + Alertmanager
+# 依赖：各业务服务通过 common 模块的 TelemetryAutoConfiguration 自动上报 Trace/Metrics/Logs。
+#
+# 使用：
+#   docker compose -f docker-compose-observability.yml up -d
+# 访问入口：
+#   Grafana       http://localhost:3000  (admin/admin)
+#   Prometheus    http://localhost:9090
+#   Jaeger UI     http://localhost:16686
+#   Alertmanager  http://localhost:9093
+#   Loki          http://localhost:3100  (Grafana 数据源，无需直接访问)
+#
+# 业务服务接入：将 application-telemetry.yml 中
+#   redteam.telemetry.otlp.endpoint 指向 http://otel-collector:4318
+#   并将日志输出到 stdout（JSON），由 Promtail/filebeat 采集至 Loki。
+# ==========================================
+
+version: "3.9"
+
+networks:
+  redteam-observability:
+    driver: bridge
+
+volumes:
+  prometheus-data:
+  grafana-data:
+  loki-data:
+  alertmanager-data:
+
+services:
+  # ============ Prometheus: 指标采集与存储 ============
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: redteam-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+      - "--storage.tsdb.retention.time=15d"
+      - "--web.enable-lifecycle"
+      - "--web.enable-admin-api"
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./prometheus-alert-rules.yml:/etc/prometheus/rules/prometheus-alert-rules.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - redteam-observability
+
+  # ============ Grafana: 可视化面板 ============
+  grafana:
+    image: grafana/grafana:10.4.0
+    container_name: redteam-grafana
+    restart: unless-stopped
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_INSTALL_PLUGINS: ""
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./grafana-dashboards:/etc/grafana/provisioning/dashboards:ro
+      - ./grafana-datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+    networks:
+      - redteam-observability
+    depends_on:
+      - prometheus
+      - loki
+
+  # ============ Jaeger: 分布式 Trace UI ============
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    container_name: redteam-jaeger
+    restart: unless-stopped
+    environment:
+      COLLECTOR_OTLP_ENABLED: "true"
+      # 仅开发/演示使用内存存储；生产请换为 Elasticsearch/Cassandra 后端
+    ports:
+      - "16686:16686"   # Jaeger UI
+      - "4317:4317"     # OTLP gRPC
+      - "4318:4318"     # OTLP HTTP
+    networks:
+      - redteam-observability
+
+  # ============ OTel Collector: Trace/Logs 中转（生产推荐） ============
+  # 当多服务上报或需要采样/批处理时启用；单服务可直连 Jaeger 的 4318。
+  otel-collector:
+    image: otel/opentelemetry-collector-contrib:0.96.0
+    container_name: redteam-otel-collector
+    restart: unless-stopped
+    command: ["--config=/etc/otelcol/config.yaml"]
+    volumes:
+      - ./otel-collector-config.yaml:/etc/otelcol/config.yaml:ro
+    ports:
+      - "14317:4317"   # OTLP gRPC（对外映射避免与 Jaeger 冲突）
+      - "14318:4318"   # OTLP HTTP
+    networks:
+      - redteam-observability
+    depends_on:
+      - jaeger
+      - loki
+
+  # ============ Loki: 日志聚合后端 ============
+  loki:
+    image: grafana/loki:2.9.5
+    container_name: redteam-loki
+    restart: unless-stopped
+    command: -config.file=/etc/loki/local-config.yaml
+    ports:
+      - "3100:3100"
+    volumes:
+      - loki-data:/loki
+    networks:
+      - redteam-observability
+
+  # ============ Alertmanager: 告警路由与抑制 ============
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    container_name: redteam-alertmanager
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - alertmanager-data:/alertmanager
+    networks:
+      - redteam-observability
+
+  # ============ Node Exporter: 主机指标采集 ============
+  node-exporter:
+    image: prom/node-exporter:v1.7.0
+    container_name: redteam-node-exporter
+    restart: unless-stopped
+    command:
+      - "--path.rootfs=/host"
+    ports:
+      - "9100:9100"
+    volumes:
+      - /:/host:ro,rslave
+    networks:
+      - redteam-observability

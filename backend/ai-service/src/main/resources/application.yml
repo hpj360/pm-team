@@ -1,0 +1,124 @@
+server:
+  port: 8093
+  servlet:
+    context-path: /
+
+spring:
+  application:
+    name: ai-service
+
+  # Jackson 配置
+  jackson:
+    date-format: yyyy-MM-dd HH:mm:ss
+    time-zone: GMT+8
+    default-property-inclusion: non_null
+
+  # 数据源配置 (v4.1.1 新增: 威胁摘要持久化)
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/redteam_file?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: postgres
+    password: postgres
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      initial-size: 5
+      min-idle: 5
+      max-active: 20
+
+  # Kafka 配置 (V4.7-P0-3 新增：消费 file.parsed 事件触发威胁摘要)
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: ai-service-group
+      auto-offset-reset: earliest
+      enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    listener:
+      concurrency: 3
+      ack-mode: RECORD
+
+# V5.1 AI Agent 化模块 - 外部服务地址配置
+search:
+  service:
+    # search-service（含 Milvus 向量检索）地址
+    url: ${SEARCH_SERVICE_URL:http://localhost:8081}
+
+profile:
+  service:
+    # profile-service（Neo4j 关系图谱）地址
+    url: ${PROFILE_SERVICE_URL:http://localhost:8085}
+
+threat:
+  intel:
+    service:
+      # 威胁情报服务地址
+      url: ${THREAT_INTEL_SERVICE_URL:http://localhost:8086}
+
+ner:
+  service:
+    # NER 实体识别服务地址
+    url: ${NER_SERVICE_URL:http://localhost:8087}
+
+# LLM 大模型配置
+llm:
+  # 提供方：ollama / remote
+  provider: ${LLM_PROVIDER:ollama}
+  # 服务端点
+  endpoint: ${LLM_ENDPOINT:http://localhost:11434}
+  # 模型名称
+  model: ${LLM_MODEL:qwen2.5:7b}
+  # API Key（remote 模式使用）
+  api-key: ${LLM_API_KEY:}
+  # 请求超时（毫秒）
+  timeout: ${LLM_TIMEOUT:60000}
+  # 最大生成 token 数
+  max-tokens: ${LLM_MAX_TOKENS:2048}
+  # 采样温度
+  temperature: ${LLM_TEMPERATURE:0.7}
+
+# MyBatis Plus 配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.redteam.common.entity,com.redteam.ai.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+
+# Knife4j API 文档配置
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+    enable-version: true
+    enable-swagger-models: true
+
+# springdoc 配置
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+  swagger-ui:
+    path: /doc.html
+    enabled: true
+
+# Actuator 健康检查
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+
+# 日志配置
+logging:
+  level:
+    root: info
+    com.redteam: debug
+  pattern:
+    console: "%d{yyyy-MM-dd HH:mm:ss.SSS} [%thread] %-5level %logger{36} - %msg%n"

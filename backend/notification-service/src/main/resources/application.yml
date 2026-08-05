@@ -1,0 +1,118 @@
+server:
+  port: 8091
+  servlet:
+    context-path: /api
+
+spring:
+  application:
+    name: notification-service
+
+  # 数据源配置
+  datasource:
+    driver-class-name: org.postgresql.Driver
+    url: jdbc:postgresql://localhost:5432/redteam_notification?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: postgres
+    password: postgres
+    type: com.alibaba.druid.pool.DruidDataSource
+    druid:
+      initial-size: 5
+      min-idle: 10
+      max-active: 50
+      max-wait: 60000
+
+  # Redis配置
+  data:
+    redis:
+      host: localhost
+      port: 6379
+      database: 1
+      timeout: 10000ms
+
+  # Kafka配置
+  kafka:
+    bootstrap-servers: localhost:9092
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      acks: all
+      retries: 3
+    consumer:
+      group-id: notification-group
+      auto-offset-reset: latest
+      enable-auto-commit: true
+      auto-commit-interval: 1000
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      properties:
+        spring.json.trusted.packages: "*"
+    listener:
+      concurrency: 3
+      ack-mode: RECORD
+    # 通知服务订阅的主题
+    topics:
+      task-events: redteam.task.events
+      file-events: redteam.file.events
+      system-events: redteam.system.events
+      im-dispatch: redteam.notification.im
+
+  # 邮件配置
+  mail:
+    host: smtp.example.com
+    port: 587
+    username: noreply@redteam.example.com
+    password: change-me
+    default-encoding: UTF-8
+    protocol: smtp
+    properties:
+      mail:
+        smtp:
+          auth: true
+          starttls:
+            enable: true
+            required: true
+          connectiontimeout: 5000
+          timeout: 5000
+          writetimeout: 5000
+
+# 邮件发送方
+notification:
+  mail:
+    from: noreply@redteam.example.com
+    enabled: true
+  im:
+    enabled: true
+
+# MyBatis Plus配置
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  type-aliases-package: com.redteam.notification.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.slf4j.Slf4jImpl
+  global-config:
+    db-config:
+      logic-delete-field: deleted
+      logic-delete-value: 1
+      logic-not-delete-value: 0
+
+# Knife4j配置
+knife4j:
+  enable: true
+  setting:
+    language: zh_cn
+
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    enabled: true
+  api-docs:
+    path: /v3/api-docs
+    enabled: true
+  packages-to-scan: com.redteam.notification.controller
+
+# 日志配置
+logging:
+  level:
+    root: info
+    com.redteam: debug
+    org.springframework.kafka: info

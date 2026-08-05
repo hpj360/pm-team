@@ -1,0 +1,160 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>攻击链分析报告</title>
+    <style>
+        body {
+            font-family: "SimSun", "STSong", serif;
+            padding: 40px;
+            color: #333;
+            line-height: 1.8;
+        }
+        h1 {
+            text-align: center;
+            font-size: 26px;
+            color: #8e44ad;
+            margin-bottom: 30px;
+        }
+        h2 {
+            font-size: 18px;
+            border-left: 4px solid #8e44ad;
+            padding-left: 10px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        .meta {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #555;
+            margin-bottom: 25px;
+        }
+        .meta p { margin: 5px 0; }
+        .meta .label {
+            display: inline-block;
+            width: 100px;
+            color: #888;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px 12px;
+            text-align: left;
+            font-size: 14px;
+        }
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        tr:nth-child(even) { background-color: #fafafa; }
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px dashed #ccc;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+        }
+        .conclusion {
+            background: #f4ecf7;
+            padding: 15px 20px;
+            border-left: 4px solid #8e44ad;
+            margin: 15px 0;
+        }
+        ol.chain {
+            counter-reset: chain-step;
+            padding-left: 0;
+            list-style: none;
+        }
+        ol.chain > li {
+            counter-increment: chain-step;
+            position: relative;
+            padding: 12px 15px 12px 55px;
+            margin: 10px 0;
+            background: #fafafa;
+            border-radius: 4px;
+        }
+        ol.chain > li::before {
+            content: counter(chain-step);
+            position: absolute;
+            left: 15px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 28px;
+            height: 28px;
+            background: #8e44ad;
+            color: white;
+            border-radius: 50%;
+            text-align: center;
+            line-height: 28px;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <h1 th:text="${reportName}">攻击链分析报告</h1>
+
+    <div class="meta">
+        <p><span class="label">报告编号：</span><span th:text="${reportId}">-</span></p>
+        <p><span class="label">任务编号：</span><span th:text="${taskId != null ? taskId : '-'}">-</span></p>
+        <p><span class="label">目标编号：</span><span th:text="${targetId != null ? targetId : '-'}">-</span></p>
+        <p><span class="label">生成时间：</span><span th:text="${#temporals.format(generatedAt, 'yyyy-MM-dd HH:mm:ss')}">-</span></p>
+    </div>
+
+    <h2>一、分析概述</h2>
+    <p th:text="${taskSummary != null ? taskSummary : '本报告基于本次渗透测试结果，重构攻击者从初始接入到目标达成的完整攻击路径。'}">
+        分析概述内容
+    </p>
+
+    <h2>二、攻击链路</h2>
+    <ol class="chain">
+        <li>信息收集：通过端口扫描与指纹识别获取目标开放服务</li>
+        <li>初始接入：利用弱口令或未授权接口进入系统</li>
+        <li>权限提升：通过内核漏洞或配置缺陷获取 root 权限</li>
+        <li>横向移动：在内网中扫描其他资产并继续渗透</li>
+        <li>目标达成：获取敏感数据或控制系统核心组件</li>
+    </ol>
+
+    <h2>三、关键节点详情</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 60px;">序号</th>
+                <th style="width: 180px;">节点名称</th>
+                <th style="width: 100px;">风险等级</th>
+                <th>描述</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="item, stat : ${findings}">
+                <td th:text="${stat.count}">1</td>
+                <td th:text="${item.name}">节点名称</td>
+                <td th:text="${item.riskLevel}">风险等级</td>
+                <td th:text="${item.description}">节点描述</td>
+            </tr>
+            <tr th:if="${findings == null or findings.isEmpty()}">
+                <td colspan="4" style="text-align: center; color: #999;">暂无关键节点</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>四、阻断建议</h2>
+    <div class="conclusion">
+        <p th:text="${conclusion != null ? conclusion : '建议在攻击链的每个关键节点部署检测与阻断措施，并定期复盘攻击路径。'}">
+            阻断建议内容
+        </p>
+    </div>
+
+    <div class="footer">
+        <p>本报告由网络安全红方文件汇聚平台自动生成，仅供内部使用。</p>
+        <p>RedTeam File Platform &copy; 2026</p>
+    </div>
+</body>
+</html>

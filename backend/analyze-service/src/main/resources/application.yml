@@ -32,6 +32,11 @@ spring:
       group-id: analyze-service-group
       auto-offset-reset: earliest
       enable-auto-commit: false
+      key-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+      value-deserializer: org.apache.kafka.common.serialization.StringDeserializer
+    listener:
+      concurrency: 5
+      ack-mode: manual
 
 # Milvus配置
 milvus:
@@ -55,6 +60,59 @@ knife4j:
   enable: true
   setting:
     language: zh_cn
+
+# 分析服务业务配置
+redteam:
+  # 向量嵌入配置
+  analyze:
+    embedding:
+      # 是否启用向量化 HTTP 调用（false 时直接走本地降级）
+      enabled: true
+      # search-service 向量化 API 地址
+      api-url: http://localhost:8083/api/search/embed
+      # 向量缓存 TTL（秒）
+      cache-ttl-seconds: 86400
+    # 沙箱配置
+    sandbox:
+      enabled: true
+      api-url: http://localhost:8090
+      api-key: ""
+      connect-timeout-ms: 5000
+      read-timeout-ms: 30000
+      poll-interval-ms: 5000
+      max-poll-count: 60
+    # Cuckoo 动态分析配置（V5.2，独立于 sandbox）
+    cuckoo:
+      enabled: ${CUCKOO_ENABLED:true}
+      endpoint: ${CUCKOO_ENDPOINT:http://localhost:8090}
+      apikey: ${CUCKOO_APIKEY:}
+      timeout: ${CUCKOO_TIMEOUT:30000}
+      poll-interval: ${CUCKOO_POLL_INTERVAL:5000}
+      max-poll-count: ${CUCKOO_MAX_POLL_COUNT:60}
+  # Kafka 配置
+  kafka:
+    bootstrap-servers: localhost:9092
+    topic:
+      parse-events: redteam.parse.events
+      analyze-events: redteam.analyze.events
+
+# TAXII 2.1 Server 配置
+taxii:
+  enabled: ${TAXII_ENABLED:true}
+  auth-type: ${TAXII_AUTH:basic}  # basic / apikey / none
+  username: ${TAXII_USERNAME:taxii}
+  password: ${TAXII_PASSWORD:taxii123}
+  api-key: ${TAXII_API_KEY:}
+
+# MISP 集成配置
+misp:
+  enabled: ${MISP_ENABLED:false}
+  endpoint: ${MISP_ENDPOINT:http://localhost:8081}
+  apikey: ${MISP_APIKEY:}
+  timeout: ${MISP_TIMEOUT:10000}
+  webhook-secret: ${MISP_WEBHOOK_SECRET:}
+  sync-cron: ${MISP_SYNC_CRON:0 0 2 * * ?}    # 每日 02:00 推送 IOC 至 MISP
+  pull-cron: ${MISP_PULL_CRON:0 0 * * * ?}    # 每小时拉取 MISP 事件
 
 # 日志配置
 logging:

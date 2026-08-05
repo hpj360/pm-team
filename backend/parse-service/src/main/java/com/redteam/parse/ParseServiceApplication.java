@@ -5,6 +5,7 @@ import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 import org.springframework.context.annotation.ComponentScan;
 import org.springframework.kafka.annotation.EnableKafka;
+import org.springframework.scheduling.annotation.EnableScheduling;
 
 /**
  * 文件解析服务启动类
@@ -13,6 +14,7 @@ import org.springframework.kafka.annotation.EnableKafka;
  */
 @SpringBootApplication
 @EnableKafka
+@EnableScheduling
 @MapperScan("com.redteam.parse.mapper")
 @ComponentScan(basePackages = {"com.redteam.common", "com.redteam.parse"})
 public class ParseServiceApplication {

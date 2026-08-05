@@ -1,0 +1,33 @@
+---
+# =============================================================================
+# 红方文件汇聚平台 - K8s 命名空间
+# =============================================================================
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: redteam-platform
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+    app.kubernetes.io/managed-by: kubectl
+    # 启用 Istio 自动注入
+    istio-injection: enabled
+    # 用于网络策略
+    security-tier: internal
+---
+# 中间件命名空间 (可选, 用于独立部署中间件)
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: redteam-middleware
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+    istio-injection: disabled
+---
+# 监控命名空间
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: redteam-monitoring
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+    istio-injection: disabled

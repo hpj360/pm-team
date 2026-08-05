@@ -66,6 +66,11 @@ public enum ResultCode {
     TOO_MANY_REQUESTS(429, "请求过于频繁，请稍后再试"),
 
     /**
+     * 触发限流
+     */
+    RATE_LIMIT_EXCEEDED(429, "请求过于频繁，请稍后重试"),
+
+    /**
      * 服务器内部错误
      */
     INTERNAL_SERVER_ERROR(500, "服务器内部错误"),

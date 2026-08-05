@@ -1,0 +1,31 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.redteam.common.mapper.WorkflowReviewMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="WorkflowReviewResultMap" type="com.redteam.common.entity.WorkflowReviewEntity">
+        <id     column="id"             property="id"/>
+        <result column="instance_id"    property="instanceId"/>
+        <result column="node_id"        property="nodeId"/>
+        <result column="reviewer_id"    property="reviewerId"/>
+        <result column="reviewer_name"  property="reviewerName"/>
+        <result column="decision"       property="decision"/>
+        <result column="comment"        property="comment"/>
+        <result column="created_at"     property="createdAt"/>
+    </resultMap>
+
+    <!-- 公共字段列 -->
+    <sql id="Base_Column_List">
+        id, instance_id, node_id, reviewer_id, reviewer_name, decision, comment, created_at
+    </sql>
+
+    <!-- 按实例ID查询审批记录（按创建时间正序） -->
+    <select id="selectByInstanceId" resultMap="WorkflowReviewResultMap">
+        SELECT <include refid="Base_Column_List"/>
+        FROM workflow_review
+        WHERE instance_id = #{instanceId}
+        ORDER BY created_at ASC
+    </select>
+
+</mapper>

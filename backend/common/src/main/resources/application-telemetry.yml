@@ -1,0 +1,61 @@
+# ==========================================
+# 红方文件分析管理平台 - 可观测性默认配置 (v5.4)
+# ==========================================
+# 启用方式（任选其一）：
+#   1. 在服务 application.yml 中设置 spring.config.import=optional:classpath:application-telemetry.yml
+#   2. 或直接将下列配置项复制到服务 application.yml
+# 所有配置均可被服务自身 application.yml / 环境变量覆盖。
+# ==========================================
+
+redteam:
+  telemetry:
+    # 可观测性总开关（false 时整体禁用 Trace/Metrics/告警装配）
+    enabled: ${REDTEAM_TELEMETRY_ENABLED:true}
+    # 服务名（默认取 spring.application.name）
+    service-name: ${spring.application.name:redteam-service}
+
+    # ===== OpenTelemetry Trace 配置 =====
+    otlp:
+      # OTLP/HTTP Span 上报端点（Collector/Jaeger）
+      # 注意：HTTP 导出器会自动追加 /v1/traces；标准 OTLP HTTP 端口为 4318，gRPC 端口为 4317
+      endpoint: ${OTEL_EXPORTER_OTLP_ENDPOINT:http://localhost:4317}
+      # 是否启用 OTLP 上报（false 时 Tracer 仍可用但不导出 Span）
+      enabled: ${REDTEAM_TELEMETRY_OTLP_ENABLED:true}
+
+    # ===== Prometheus Metrics 配置 =====
+    # /actuator/prometheus 端点暴露由 TelemetryEnvironmentPostProcessor 默认注入
+    # 若需自定义，覆盖 management.endpoints.web.exposure.include 即可
+
+    # ===== 告警通知配置 =====
+    alert:
+      enabled: ${REDTEAM_TELEMETRY_ALERT_ENABLED:true}
+      feishu:
+        # 飞书自定义机器人 Webhook（不配置则告警仅记录日志）
+        webhook: ${REDTEAM_TELEMETRY_FEISHU_WEBHOOK:}
+
+# ===== Spring Boot Actuator / Micrometer 配置 =====
+# 以下为显式默认值，与 TelemetryEnvironmentPostProcessor 注入的一致；
+# 服务可通过 spring.config.import 加载本文件获得，亦可单独配置。
+management:
+  endpoints:
+    web:
+      base-path: /actuator
+      exposure:
+        include: health,info,prometheus,metrics
+  endpoint:
+    prometheus:
+      enabled: true
+    health:
+      show-details: when-authorized
+  metrics:
+    export:
+      prometheus:
+        enabled: true
+        step: 30s
+    distribution:
+      percentiles-histogram:
+        http.server.requests: true
+      percentiles:
+        http.server.requests: 0.5,0.95,0.99
+    tags:
+      application: ${spring.application.name:redteam-service}

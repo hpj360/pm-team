@@ -1,20 +1,21 @@
 /**
  * 文件状态管理
+ * - 列表 + 详情
+ * - 上传任务（含分片进度）
  */
-
 import { create } from 'zustand';
-import type { FileInfo, FileListParams, FileStatus, FileType } from '@/types';
+import type { FileInfo, FileListParams, UploadTask } from '@/types';
 
 interface FileState {
-  // 状态
   files: FileInfo[];
   currentFile: FileInfo | null;
   total: number;
   loading: boolean;
   params: FileListParams;
   selectedFileIds: string[];
-  
-  // 操作
+  /** 上传任务列表 */
+  uploadTasks: UploadTask[];
+
   setFiles: (files: FileInfo[]) => void;
   setTotal: (total: number) => void;
   setLoading: (loading: boolean) => void;
@@ -25,65 +26,47 @@ interface FileState {
   updateFile: (id: string, data: Partial<FileInfo>) => void;
   removeFile: (id: string) => void;
   removeFiles: (ids: string[]) => void;
+
+  addUploadTask: (task: UploadTask) => void;
+  updateUploadTask: (uid: string, data: Partial<UploadTask>) => void;
+  removeUploadTask: (uid: string) => void;
+  clearCompletedUploadTasks: () => void;
+
   reset: () => void;
 }
 
-// 默认查询参数
 const defaultParams: FileListParams = {
   page: 1,
   pageSize: 20,
 };
 
 export const useFileStore = create<FileState>((set) => ({
-  // 初始状态
   files: [],
   currentFile: null,
   total: 0,
   loading: false,
   params: defaultParams,
   selectedFileIds: [],
+  uploadTasks: [],
 
-  // 设置文件列表
   setFiles: (files) => set({ files }),
-
-  // 设置总数
   setTotal: (total) => set({ total }),
-
-  // 设置加载状态
   setLoading: (loading) => set({ loading }),
-
-  // 设置查询参数
   setParams: (params) =>
-    set((state) => ({
-      params: { ...state.params, ...params },
-    })),
-
-  // 设置当前文件
+    set((state) => ({ params: { ...state.params, ...params } })),
   setCurrentFile: (file) => set({ currentFile: file }),
-
-  // 设置选中的文件ID列表
   setSelectedFileIds: (ids) => set({ selectedFileIds: ids }),
 
-  // 添加文件
   addFile: (file) =>
-    set((state) => ({
-      files: [file, ...state.files],
-      total: state.total + 1,
-    })),
+    set((state) => ({ files: [file, ...state.files], total: state.total + 1 })),
 
-  // 更新文件
   updateFile: (id, data) =>
     set((state) => ({
-      files: state.files.map((file) =>
-        file.id === id ? { ...file, ...data } : file
-      ),
+      files: state.files.map((file) => (file.id === id ? { ...file, ...data } : file)),
       currentFile:
-        state.currentFile?.id === id
-          ? { ...state.currentFile, ...data }
-          : state.currentFile,
+        state.currentFile?.id === id ? { ...state.currentFile, ...data } : state.currentFile,
     })),
 
-  // 删除文件
   removeFile: (id) =>
     set((state) => ({
       files: state.files.filter((file) => file.id !== id),
@@ -92,20 +75,34 @@ export const useFileStore = create<FileState>((set) => ({
       currentFile: state.currentFile?.id === id ? null : state.currentFile,
     })),
 
-  // 批量删除文件
   removeFiles: (ids) =>
     set((state) => ({
       files: state.files.filter((file) => !ids.includes(file.id)),
       total: state.total - ids.length,
-      selectedFileIds: state.selectedFileIds.filter(
-        (fileId) => !ids.includes(fileId)
-      ),
-      currentFile: ids.includes(state.currentFile?.id || '')
-        ? null
-        : state.currentFile,
+      selectedFileIds: state.selectedFileIds.filter((fileId) => !ids.includes(fileId)),
+      currentFile: ids.includes(state.currentFile?.id || '') ? null : state.currentFile,
     })),
 
-  // 重置状态
+  addUploadTask: (task) =>
+    set((state) => ({ uploadTasks: [task, ...state.uploadTasks] })),
+
+  updateUploadTask: (uid, data) =>
+    set((state) => ({
+      uploadTasks: state.uploadTasks.map((t) => (t.uid === uid ? { ...t, ...data } : t)),
+    })),
+
+  removeUploadTask: (uid) =>
+    set((state) => ({
+      uploadTasks: state.uploadTasks.filter((t) => t.uid !== uid),
+    })),
+
+  clearCompletedUploadTasks: () =>
+    set((state) => ({
+      uploadTasks: state.uploadTasks.filter(
+        (t) => t.status !== 'completed' && t.status !== 'instant' && t.status !== 'failed',
+      ),
+    })),
+
   reset: () =>
     set({
       files: [],
@@ -114,5 +111,6 @@ export const useFileStore = create<FileState>((set) => ({
       loading: false,
       params: defaultParams,
       selectedFileIds: [],
+      uploadTasks: [],
     }),
 }));

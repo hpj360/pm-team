@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN"
+        "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.redteam.common.mapper.SearchTemplateMapper">
+
+    <!-- 结果映射 -->
+    <resultMap id="SearchTemplateResultMap" type="com.redteam.common.entity.SearchTemplateEntity">
+        <id column="id" property="id"/>
+        <result column="user_id" property="userId"/>
+        <result column="name" property="name"/>
+        <result column="params_json" property="paramsJson"/>
+        <result column="created_at" property="createdAt"/>
+        <result column="updated_at" property="updatedAt"/>
+    </resultMap>
+
+    <!-- 按用户ID查询搜索模板列表（按创建时间倒序） -->
+    <select id="selectByUserId" resultMap="SearchTemplateResultMap">
+        SELECT id, user_id, name, params_json, created_at, updated_at
+        FROM search_template
+        WHERE user_id = #{userId}
+        ORDER BY created_at DESC
+    </select>
+
+</mapper>

@@ -1,0 +1,564 @@
+{
+  "info": {
+    "name": "红方文件分析管理平台 V3",
+    "_postman_id": "red-team-platform-v3-collection",
+    "description": "红方文件分析管理平台 V3 Postman 集合，覆盖 V2 + V3 迭代全部新增端点。\n\n## 服务端口说明\n- auth-service: 8080\n- upload-service: 8081\n- parse-service: 8082\n- search-service: 8083\n- analyze-service: 8084\n- profile-service: 8085\n- task-service: 8090\n- notification-service: 8091\n- report-service: 8092\n\n## 变量配置\n- base_url: 默认 http://localhost:8080，调试不同服务时切换端口，或配置 API 网关地址\n- token: 登录后自动填充\n- space_id: 团队空间 ID\n\n## V3 新增端点\n- 标签管理（11 个）\n- 搜索模板（3 个）\n- 图算法（2 个）\n- 搜索增强（布尔组合 / 二次检索 / 标签筛选）\n- 定时报告增强（webhookType + 节假日跳过）\n\n## V2 已包含端点\n- parse-service NER 模型状态（V2.1）\n- profile-service Neo4j 多跳查询（V2.2）\n- report-service 定时报告调度（V2.5，7 端点）",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "auth": {
+    "type": "bearer",
+    "bearer": [
+      { "key": "token", "value": "{{token}}", "type": "string" }
+    ]
+  },
+  "variable": [
+    { "key": "base_url", "value": "http://localhost:8080", "type": "string" },
+    { "key": "token", "value": "", "type": "string" },
+    { "key": "space_id", "value": "1001", "type": "string" },
+    { "key": "file_id", "value": "f_001", "type": "string" },
+    { "key": "tag_id", "value": "t_001", "type": "string" },
+    { "key": "target_id", "value": "tg_001", "type": "string" },
+    { "key": "schedule_id", "value": "rs_001", "type": "string" },
+    { "key": "template_id", "value": "tpl_search_001", "type": "string" }
+  ],
+  "item": [
+    {
+      "name": "auth-service",
+      "description": "认证服务（端口 8080）：登录/登出/Token 刷新、用户/角色/权限管理、MFA",
+      "item": [
+        {
+          "name": "POST /api/v1/auth/login — 用户登录",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"username\": \"admin\",\n  \"password\": \"SM4加密后的密码Base64\",\n  \"captcha_id\": \"cap_abc123\",\n  \"captcha_code\": \"A1B2\"\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/api/v1/auth/login",
+            "description": "用户名 + 密码 + 图形验证码登录。登录成功后从响应中提取 access_token 填入 {{token}} 变量，后续请求自动携带 Bearer Token。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "search-service",
+      "description": "检索服务（端口 8083）：混合检索、搜索建议、历史、热词、标签管理、搜索模板",
+      "item": [
+        {
+          "name": "文件搜索",
+          "item": [
+            {
+              "name": "POST /api/v1/search — 混合检索",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": \"勒索病毒 IOC\",\n  \"modes\": [\"FULLTEXT\", \"METADATA\", \"VECTOR\"],\n  \"filters\": {\n    \"extension\": [\"exe\", \"dll\"],\n    \"start_time\": 1785000000000,\n    \"end_time\": 1785090000000\n  },\n  \"page\": 1,\n  \"size\": 20,\n  \"highlight\": true\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{base_url}}/api/v1/search",
+                "description": "混合检索（全文 + 元数据 + 向量）。默认开启 FULLTEXT + METADATA；启用 VECTOR 时结果按融合分数排序。"
+              }
+            },
+            {
+              "name": "POST /api/v1/search (布尔组合) — V3 新增",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": \"恶意样本\",\n  \"booleanConditions\": {\n    \"logic\": \"AND\",\n    \"conditions\": [\n      { \"field\": \"content\", \"operator\": \"CONTAINS\", \"value\": \"勒索\" },\n      { \"field\": \"content\", \"operator\": \"NOT_CONTAINS\", \"value\": \"白名单\" },\n      {\n        \"logic\": \"OR\",\n        \"conditions\": [\n          { \"field\": \"file_type\", \"operator\": \"IN\", \"value\": [\"exe\", \"dll\"] },\n          { \"field\": \"extension\", \"operator\": \"EQ\", \"value\": \"scr\" }\n        ]\n      }\n    ]\n  },\n  \"page\": 1,\n  \"size\": 20\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{base_url}}/api/v1/search",
+                "description": "V3 新增：布尔组合检索。通过 booleanConditions 字段支持 AND/OR/NOT 逻辑组合，最多嵌套 3 层。与 query 关键词取交集。"
+              }
+            },
+            {
+              "name": "POST /api/v1/search (二次检索) — V3 新增",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": \"勒索病毒\",\n  \"refineQuery\": \"C2 服务器\",\n  \"refineFileIds\": [\"f_001\", \"f_002\", \"f_003\", \"f_004\", \"f_005\"],\n  \"page\": 1,\n  \"size\": 10\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{base_url}}/api/v1/search",
+                "description": "V3 新增：二次检索。通过 refineQuery + refineFileIds 在已有结果范围内搜索，最多 1000 个文件 ID。不参与向量召回，仅做全文 + 元数据过滤。"
+              }
+            },
+            {
+              "name": "POST /api/v1/search (标签筛选) — V3 新增",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"query\": \"APT 攻击\",\n  \"tagIds\": [\"t_001\", \"t_002\", \"t_003\"],\n  \"tagLogic\": \"AND\",\n  \"page\": 1,\n  \"size\": 20\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{base_url}}/api/v1/search",
+                "description": "V3 新增：标签筛选。通过 tagIds 字段按标签 ID 列表筛选文件，tagLogic 支持 AND（默认）/ OR。最多 50 个标签。"
+              }
+            }
+          ]
+        },
+        {
+          "name": "搜索模板",
+          "item": [
+            {
+              "name": "POST /api/search/templates — 保存搜索模板 — V3 新增",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"name\": \"APT28 周报检索\",\n  \"description\": \"检索 APT28 相关样本，按 EXE/DLL 过滤\",\n  \"searchRequest\": {\n    \"query\": \"APT28\",\n    \"modes\": [\"FULLTEXT\", \"METADATA\"],\n    \"filters\": { \"extension\": [\"exe\", \"dll\"] },\n    \"tagIds\": [\"t_050\"],\n    \"tagLogic\": \"AND\",\n    \"size\": 50\n  },\n  \"isPublic\": true\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{base_url}}/api/search/templates",
+                "description": "V3 新增：保存搜索模板。searchRequest 字段为完整的搜索请求体（含 query/modes/filters/booleanConditions/tagIds 等）。单用户最多 50 个模板。"
+              }
+            },
+            {
+              "name": "GET /api/search/templates — 搜索模板列表 — V3 新增",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/search/templates?keyword=APT&page=1&size=20",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "search", "templates"],
+                  "query": [
+                    { "key": "keyword", "value": "APT" },
+                    { "key": "page", "value": "1" },
+                    { "key": "size", "value": "20" }
+                  ]
+                },
+                "description": "V3 新增：搜索模板列表。支持 keyword 模糊搜索、isPublic 过滤公开模板。"
+              }
+            },
+            {
+              "name": "DELETE /api/search/templates/{id} — 删除搜索模板 — V3 新增",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "url": "{{base_url}}/api/search/templates/{{template_id}}",
+                "description": "V3 新增：删除搜索模板。仅创建者或管理员可删除；公开模板删除后其他用户引用同步失效。"
+              }
+            }
+          ]
+        },
+        {
+          "name": "标签管理",
+          "item": [
+            {
+              "name": "GET /api/tags — 标签列表查询 — V3 新增",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/tags?layer=L1&category=FILE&enabled=true&page=1&size=20",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "tags"],
+                  "query": [
+                    { "key": "layer", "value": "L1" },
+                    { "key": "category", "value": "FILE" },
+                    { "key": "enabled", "value": "true" },
+                    { "key": "page", "value": "1" },
+                    { "key": "size", "value": "20" }
+                  ]
+                },
+                "description": "V3 新增：分页查询标签字典。支持按层级（L1-L6）、分类、启用状态过滤。"
+              }
+            },
+            {
+              "name": "GET /api/tags/tree — 标签层级树 — V3 新增",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/tags/tree?enabledOnly=true",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "tags", "tree"],
+                  "query": [
+                    { "key": "enabledOnly", "value": "true" }
+                  ]
+                },
+                "description": "V3 新增：以树形结构返回 L1-L6 全部标签。可选 layer 参数仅返回指定层级，enabledOnly 仅返回启用标签。"
+              }
+            },
+            {
+              "name": "GET /api/tags/{id} — 标签详情 — V3 新增",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "url": "{{base_url}}/api/tags/{{tag_id}}",
+                "description": "V3 新增：查询标签详情，返回完整字段（含识别规则、口径定义、文件数等）。"
+              }
+            },
+            {
+              "name": "POST /api/tags — 创建标签 — V3 新增",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tag_code\": \"L4.SCENE.VULN.EXPLOIT\",\n  \"tag_name\": \"漏洞利用场景\",\n  \"layer\": \"L4\",\n  \"category\": \"SCENE\",\n  \"value_type\": \"BOOL\",\n  \"applicable_object\": \"FILE\",\n  \"identify_rule\": \"文件包含 CVE 编号且存在 EXP/POC 字样\",\n  \"is_multi\": false,\n  \"parent_code\": \"L4.SCENE.VULN\",\n  \"enabled\": true,\n  \"description\": \"文件涉及漏洞利用场景\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{base_url}}/api/tags",
+                "description": "V3 新增：创建标签。tag_code 遵循 `层级.分类.名称.值` 规范，全局唯一，创建后不可修改。"
+              }
+            },
+            {
+              "name": "PUT /api/tags/{id} — 更新标签 — V3 新增",
+              "request": {
+                "method": "PUT",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tag_name\": \"漏洞利用场景（更新）\",\n  \"identify_rule\": \"文件包含 CVE 编号且存在 EXP/POC/Shellcode 字样\",\n  \"description\": \"文件涉及漏洞利用场景（含 Shellcode）\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{base_url}}/api/tags/{{tag_id}}",
+                "description": "V3 新增：更新标签字段。tag_code 与 layer 创建后不可修改；可更新名称、识别规则、描述、启用状态等。"
+              }
+            },
+            {
+              "name": "PATCH /api/tags/{id}/toggle — 启用/禁用标签 — V3 新增",
+              "request": {
+                "method": "PATCH",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"enabled\": false\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{base_url}}/api/tags/{{tag_id}}/toggle",
+                "description": "V3 新增：切换标签启用状态。禁用后该标签不再出现在自动识别和手动打标选项中，已打标文件的标签保留但标记为「已禁用」。请求体可选，不传则切换当前状态。"
+              }
+            },
+            {
+              "name": "DELETE /api/tags/{id} — 删除标签 — V3 新增",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/tags/{{tag_id}}?force=false",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "tags", "{{tag_id}}"],
+                  "query": [
+                    { "key": "force", "value": "false" }
+                  ]
+                },
+                "description": "V3 新增：软删除标签。若标签已被文件引用，需先取消引用或传 force=true 强制级联取消。删除后不可恢复。"
+              }
+            },
+            {
+              "name": "POST /api/tags/files/{fileId} — 文件打标 — V3 新增",
+              "request": {
+                "method": "POST",
+                "header": [
+                  { "key": "Content-Type", "value": "application/json" },
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "body": {
+                  "mode": "raw",
+                  "raw": "{\n  \"tagIds\": [\"t_001\", \"t_002\", \"t_003\"],\n  \"source\": \"MANUAL\",\n  \"remark\": \"分析师手动打标\"\n}",
+                  "options": { "raw": { "language": "json" } }
+                },
+                "url": "{{base_url}}/api/tags/files/{{file_id}}",
+                "description": "V3 新增：为指定文件打上一个或多个标签。重复打标自动去重，已禁用的标签不允许打标。source 可选 MANUAL（默认）/ AUTO_REGEX / AUTO_DICT / AUTO_ML / AUTO_ASSOC。"
+              }
+            },
+            {
+              "name": "DELETE /api/tags/files/{fileId}/{tagId} — 取消文件标签 — V3 新增",
+              "request": {
+                "method": "DELETE",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "url": "{{base_url}}/api/tags/files/{{file_id}}/{{tag_id}}",
+                "description": "V3 新增：取消文件的某个标签。手动标签可直接取消；自动标签取消后下次识别周期会重新打上，如需永久屏蔽请禁用标签。"
+              }
+            },
+            {
+              "name": "GET /api/tags/files/{fileId} — 查询文件标签 — V3 新增",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "url": "{{base_url}}/api/tags/files/{{file_id}}",
+                "description": "V3 新增：查询指定文件的全部标签，包含自动标签与手动标签。响应中每个标签附带 source（来源）、confidence（置信度）、operated_by、operated_at 字段。"
+              }
+            },
+            {
+              "name": "GET /api/tags/{tagId}/files — 按标签检索文件 — V3 新增",
+              "request": {
+                "method": "GET",
+                "header": [
+                  { "key": "Authorization", "value": "Bearer {{token}}" },
+                  { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+                ],
+                "url": {
+                  "raw": "{{base_url}}/api/tags/{{tag_id}}/files?page=1&size=20",
+                  "host": ["{{base_url}}"],
+                  "path": ["api", "tags", "{{tag_id}}", "files"],
+                  "query": [
+                    { "key": "page", "value": "1" },
+                    { "key": "size", "value": "20" }
+                  ]
+                },
+                "description": "V3 新增：查询带有指定标签的全部文件，支持分页。可选 source 参数过滤打标来源（MANUAL / AUTO_*）。"
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "profile-service",
+      "description": "目标画像服务（端口 8085）：目标管理、画像生成、关系图谱、Neo4j 图算法",
+      "item": [
+        {
+          "name": "GET /api/profile/graph/algorithms — 列出可用图算法 — V3 新增",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+            ],
+            "url": "{{base_url}}/api/profile/graph/algorithms",
+            "description": "V3 新增：返回当前 Neo4j GDS 实例支持的图算法清单（pagerank / louvain / betweenness / wcc / shortestPath），含算法名、类别、参数说明、是否可用。GDS 未启用时返回 code=60006。"
+          }
+        },
+        {
+          "name": "POST /api/profile/graph/algorithms/{algorithm} — 执行图算法 — V3 新增",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"targetId\": \"{{target_id}}\",\n  \"depth\": 2,\n  \"nodeTypes\": [\"PERSON\", \"ORG\", \"IP\", \"DOMAIN\"],\n  \"minWeight\": 0.5,\n  \"limit\": 20,\n  \"params\": {\n    \"maxIterations\": 30,\n    \"dampingFactor\": 0.85\n  }\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/api/profile/graph/algorithms/pagerank",
+            "description": "V3 新增：在目标关系图谱上执行指定图算法（pagerank / louvain / betweenness / wcc / shortestPath）。返回中心度排名、社区划分或路径。建议限定 targetId 子图，避免全图执行耗时。"
+          }
+        },
+        {
+          "name": "GET /api/profile/relations/{targetId} — Neo4j 多跳关系查询 — V2.2 新增",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/profile/relations/{{target_id}}?depth=2&nodeTypes=PERSON,ORG,IP,DOMAIN&limit=200&minWeight=0.0",
+              "host": ["{{base_url}}"],
+              "path": ["api", "profile", "relations", "{{target_id}}"],
+              "query": [
+                { "key": "depth", "value": "2" },
+                { "key": "nodeTypes", "value": "PERSON,ORG,IP,DOMAIN" },
+                { "key": "limit", "value": "200" },
+                { "key": "minWeight", "value": "0.0" }
+              ]
+            },
+            "description": "V2.2 新增：以指定目标为起点，查询 depth 跳内的关联节点与边，返回 Neo4j 子图结构。Neo4j 不可用时返回 code=60003 自动降级到 7.3.1。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "report-service",
+      "description": "报告服务（端口 8092）：报告生成、模板管理、定时报告调度（V3 增强 webhookType + 节假日跳过）",
+      "item": [
+        {
+          "name": "POST /api/report/schedules (含 webhookType) — 创建定时报告 — V2.5/V3 增强",
+          "request": {
+            "method": "POST",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"scheduleName\": \"APT28 周报\",\n  \"reportType\": \"TARGET_ANALYSIS\",\n  \"templateId\": \"tpl_target_analysis\",\n  \"cronExpression\": \"0 0 9 ? * MON\",\n  \"format\": \"PDF\",\n  \"dataSource\": {\n    \"target_id\": \"{{target_id}}\",\n    \"file_ids\": [\"f_001\", \"f_002\"],\n    \"ioc_ids\": [\"ioc_001\"]\n  },\n  \"recipients\": [\"analyst@redteam.example.com\", \"lead@redteam.example.com\"],\n  \"config\": {\n    \"include_ioc\": true,\n    \"include_entities\": true,\n    \"include_graph\": true\n  },\n  \"enabled\": true,\n  \"description\": \"每周一上午 9 点自动生成 APT28 组织分析周报\",\n  \"webhookType\": \"ALL\",\n  \"webhookConfig\": {\n    \"slackWebhookUrl\": \"https://hooks.slack.com/services/REDACTED_WEBHOOK_URL\",\n    \"slackChannel\": \"#redteam-intel\",\n    \"dingtalkWebhookUrl\": \"https://oapi.dingtalk.com/robot/send?access_token=REDACTED\",\n    \"dingtalkSecret\": \"SEC_REDACTED\",\n    \"notifyOnSuccess\": true,\n    \"notifyOnFailure\": true\n  },\n  \"skipHolidays\": true\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/api/report/schedules",
+            "description": "V2.5 新增 / V3 增强：创建定时报告调度。V3 新增 webhookType（EMAIL/SLACK/DINGTALK/ALL）支持多通道推送；新增 skipHolidays 跳过中国法定节假日 + 调休日。webhookConfig 配置 Slack/钉钉 Webhook 详情。"
+          }
+        },
+        {
+          "name": "GET /api/report/schedules — 定时报告列表 — V2.5 新增",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/report/schedules?page=1&size=10&status=ENABLED",
+              "host": ["{{base_url}}"],
+              "path": ["api", "report", "schedules"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "size", "value": "10" },
+                { "key": "status", "value": "ENABLED" }
+              ]
+            },
+            "description": "V2.5 新增：定时报告列表。支持 status / reportType / keyword 过滤。"
+          }
+        },
+        {
+          "name": "GET /api/report/schedules/{id} — 定时报告详情 — V2.5 新增",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+            ],
+            "url": "{{base_url}}/api/report/schedules/{{schedule_id}}",
+            "description": "V2.5 新增：定时报告详情。包含完整调度配置、最近一次执行结果、下次触发时间。V3 响应额外返回 webhookType / webhookConfig（掩码）/ skipHolidays 字段。"
+          }
+        },
+        {
+          "name": "PUT /api/report/schedules/{id}/toggle — 启停定时报告 — V2.5 新增",
+          "request": {
+            "method": "PUT",
+            "header": [
+              { "key": "Content-Type", "value": "application/json" },
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+            ],
+            "body": {
+              "mode": "raw",
+              "raw": "{\n  \"enabled\": false\n}",
+              "options": { "raw": { "language": "json" } }
+            },
+            "url": "{{base_url}}/api/report/schedules/{{schedule_id}}/toggle",
+            "description": "V2.5 新增：切换定时报告启停状态（ENABLED ↔ DISABLED）。停用后立即从调度器移除，启用后重新注册。请求体可选，不传则切换当前状态。"
+          }
+        },
+        {
+          "name": "DELETE /api/report/schedules/{id} — 删除定时报告 — V2.5 新增",
+          "request": {
+            "method": "DELETE",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+            ],
+            "url": "{{base_url}}/api/report/schedules/{{schedule_id}}",
+            "description": "V2.5 新增：永久删除定时报告配置（软删除，历史执行记录保留 30 天）。"
+          }
+        },
+        {
+          "name": "GET /api/report/schedules/{id}/history — 查询执行历史 — V2.5 新增",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+            ],
+            "url": {
+              "raw": "{{base_url}}/api/report/schedules/{{schedule_id}}/history?page=1&size=20",
+              "host": ["{{base_url}}"],
+              "path": ["api", "report", "schedules", "{{schedule_id}}", "history"],
+              "query": [
+                { "key": "page", "value": "1" },
+                { "key": "size", "value": "20" }
+              ]
+            },
+            "description": "V2.5 新增：查询某条定时报告的执行历史。V3 节假日跳过的执行记录 status=SKIPPED，errorMsg 含节假日名称。支持 status / startTime / endTime 过滤。"
+          }
+        }
+      ]
+    },
+    {
+      "name": "parse-service",
+      "description": "文件解析服务（端口 8082）：文件解析、结构化提取、NER 模型管理",
+      "item": [
+        {
+          "name": "GET /api/parse/ner/model-status — 查询 NER 模型状态 — V2.1 新增",
+          "request": {
+            "method": "GET",
+            "header": [
+              { "key": "Authorization", "value": "Bearer {{token}}" },
+              { "key": "X-Team-Space-Id", "value": "{{space_id}}" }
+            ],
+            "url": "{{base_url}}/api/parse/ner/model-status",
+            "description": "V2.1 新增：查询 security-BERT NER 模型状态。status=READY（模型已加载）/ FALLBACK（已降级到正则兜底）/ FAILED（加载失败）。前端「模型健康」卡片与监控大盘使用。"
+          }
+        }
+      ]
+    }
+  ]
+}

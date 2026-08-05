@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package redteam.common;
+
+option java_package = "com.redteam.common.grpc";
+option java_multiple_files = true;
+option go_package = "redteam/common;commonpb";
+
+// ============================================================================
+// 通用消息定义
+// 所有服务间 gRPC 调用复用本文件中的 Result / PageRequest / PageResult / Empty
+// ============================================================================
+
+// 空消息，用于无入参或无返回的 RPC
+message Empty {}
+
+// 通用响应包装（对应 REST 层 Result<T>）
+// code=200 表示成功，其余为错误码（参见 docs/api-contracts/README.md 错误码规范）
+message Result {
+  // 响应码
+  int32 code = 1;
+  // 响应消息
+  string message = 2;
+  // 响应数据（JSON 序列化后的字符串，避免泛型）
+  string data = 3;
+  // 服务器时间戳（毫秒）
+  int64 timestamp = 4;
+}
+
+// 分页请求参数
+message PageRequest {
+  // 当前页码，从 1 开始
+  int32 page = 1;
+  // 每页大小，默认 20，最大 100
+  int32 size = 2;
+  // 排序字段
+  string sort_field = 3;
+  // 排序方向：asc / desc
+  string sort_order = 4;
+}
+
+// 分页响应包装（对应 REST 层 PageResult<T>）
+message PageResult {
+  // 当前页数据列表（JSON 序列化后的字符串）
+  repeated string records = 1;
+  // 总记录数
+  int64 total = 2;
+  // 当前页码
+  int32 page = 3;
+  // 每页大小
+  int32 size = 4;
+}
+
+// 键值对，用于动态参数传递
+message KeyValue {
+  string key = 1;
+  string value = 2;
+}
+
+// 通用 ID 请求
+message IdRequest {
+  // 资源 ID
+  string id = 1;
+}
+
+// 通用 ID 响应
+message IdResponse {
+  // 资源 ID
+  string id = 1;
+}
+
+// 租户/用户上下文，用于多租户与权限校验
+message RequestContext {
+  // 租户 ID
+  string tenant_id = 1;
+  // 操作人用户 ID
+  string user_id = 2;
+  // 操作人用户名
+  string username = 3;
+  // 角色编码列表
+  repeated string roles = 4;
+  // 权限编码列表
+  repeated string permissions = 5;
+  // 链路追踪 ID
+  string trace_id = 6;
+  // 客户端 IP
+  string client_ip = 7;
+}
+
+// 健康检查请求
+message HealthCheckRequest {
+  // 服务名称
+  string service = 1;
+}
+
+// 健康检查响应
+message HealthCheckResponse {
+  // 服务状态：SERVING / NOT_SERVING / UNKNOWN
+  enum ServingStatus {
+    UNKNOWN = 0;
+    SERVING = 1;
+    NOT_SERVING = 2;
+  }
+  ServingStatus status = 1;
+  // 服务版本
+  string version = 2;
+  // 启动时间（毫秒时间戳）
+  int64 start_time = 3;
+}

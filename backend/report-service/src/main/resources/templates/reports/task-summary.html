@@ -1,0 +1,142 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="zh-CN">
+<head>
+    <meta charset="UTF-8"/>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+    <title>任务总结报告</title>
+    <style>
+        body {
+            font-family: "SimSun", "STSong", serif;
+            padding: 40px;
+            color: #333;
+            line-height: 1.8;
+        }
+        h1 {
+            text-align: center;
+            font-size: 24px;
+            color: #1a1a1a;
+            margin-bottom: 30px;
+        }
+        h2 {
+            font-size: 18px;
+            border-left: 4px solid #c0392b;
+            padding-left: 10px;
+            margin-top: 30px;
+            margin-bottom: 15px;
+        }
+        .meta {
+            background: #f8f9fa;
+            padding: 15px 20px;
+            border-radius: 4px;
+            font-size: 14px;
+            color: #555;
+            margin-bottom: 25px;
+        }
+        .meta p {
+            margin: 5px 0;
+        }
+        .meta .label {
+            display: inline-block;
+            width: 100px;
+            color: #888;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 15px 0;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px 12px;
+            text-align: left;
+            font-size: 14px;
+        }
+        th {
+            background-color: #f5f5f5;
+            font-weight: bold;
+        }
+        tr:nth-child(even) {
+            background-color: #fafafa;
+        }
+        .risk-high {
+            color: #c0392b;
+            font-weight: bold;
+        }
+        .risk-medium {
+            color: #d68910;
+            font-weight: bold;
+        }
+        .risk-low {
+            color: #27ae60;
+        }
+        .footer {
+            margin-top: 50px;
+            padding-top: 20px;
+            border-top: 1px dashed #ccc;
+            text-align: center;
+            font-size: 12px;
+            color: #999;
+        }
+        .conclusion {
+            background: #fff8e1;
+            padding: 15px 20px;
+            border-left: 4px solid #f39c12;
+            margin: 15px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1 th:text="${reportName}">任务总结报告</h1>
+
+    <div class="meta">
+        <p><span class="label">报告编号：</span><span th:text="${reportId}">-</span></p>
+        <p><span class="label">任务编号：</span><span th:text="${taskId != null ? taskId : '-'}">-</span></p>
+        <p><span class="label">生成时间：</span><span th:text="${#temporals.format(generatedAt, 'yyyy-MM-dd HH:mm:ss')}">-</span></p>
+    </div>
+
+    <h2>一、任务概述</h2>
+    <p th:text="${taskSummary != null ? taskSummary : '本次任务已完成所有既定目标的安全测试工作。'}">
+        任务概述内容
+    </p>
+
+    <h2>二、关键发现</h2>
+    <table>
+        <thead>
+            <tr>
+                <th style="width: 60px;">序号</th>
+                <th style="width: 180px;">发现项</th>
+                <th style="width: 100px;">风险等级</th>
+                <th>描述</th>
+            </tr>
+        </thead>
+        <tbody>
+            <tr th:each="item, stat : ${findings}">
+                <td th:text="${stat.count}">1</td>
+                <td th:text="${item.name}">发现项名称</td>
+                <td>
+                    <span th:text="${item.riskLevel}"
+                          th:classappend="${item.riskLevel == '高危' ? 'risk-high' : (item.riskLevel == '中危' ? 'risk-medium' : 'risk-low')}">
+                        风险等级
+                    </span>
+                </td>
+                <td th:text="${item.description}">发现项描述</td>
+            </tr>
+            <tr th:if="${findings == null or findings.isEmpty()}">
+                <td colspan="4" style="text-align: center; color: #999;">暂无关键发现</td>
+            </tr>
+        </tbody>
+    </table>
+
+    <h2>三、结论与建议</h2>
+    <div class="conclusion">
+        <p th:text="${conclusion != null ? conclusion : '建议根据上述发现项制定整改计划，并持续跟踪修复进度。'}">
+            结论内容
+        </p>
+    </div>
+
+    <div class="footer">
+        <p>本报告由网络安全红方文件汇聚平台自动生成，仅供内部使用。</p>
+        <p>RedTeam File Platform &copy; 2026</p>
+    </div>
+</body>
+</html>

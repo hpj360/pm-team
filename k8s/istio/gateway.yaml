@@ -1,0 +1,35 @@
+---
+# =============================================================================
+# Istio 灰度发布配置
+# 流量切分: v1 90% (稳定版) + v2 10% (金丝雀)
+# =============================================================================
+# 对外入口网关
+apiVersion: networking.istio.io/v1beta1
+kind: Gateway
+metadata:
+  name: redteam-gateway
+  namespace: redteam-platform
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+spec:
+  selector:
+    istio: ingressgateway
+  servers:
+    - port:
+        number: 80
+        name: http
+        protocol: HTTP
+      hosts:
+        - "redteam.example.com"
+      # 强制 HTTP -> HTTPS (依赖 TLS Gateway)
+      # tls:
+      #   httpsRedirect: true
+    - port:
+        number: 443
+        name: https
+        protocol: HTTPS
+      tls:
+        mode: SIMPLE
+        credentialName: redteam-tls
+      hosts:
+        - "redteam.example.com"

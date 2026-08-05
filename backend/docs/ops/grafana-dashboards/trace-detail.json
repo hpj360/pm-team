@@ -1,0 +1,140 @@
+{
+  "title": "红方平台 - Trace 与慢请求分析 (v5.4)",
+  "uid": "redteam-trace-detail",
+  "version": 1,
+  "schemaVersion": 39,
+  "description": "分布式追踪分析：Span 上报速率、OTLP 导出错误、慢请求 Top、HTTP 延迟分位、Trace 串联覆盖率。",
+  "tags": ["redteam", "trace", "v5.4"],
+  "timezone": "browser",
+  "time": { "from": "now-1h", "to": "now" },
+  "refresh": "30s",
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" },
+        "hide": 0,
+        "label": "数据源"
+      },
+      {
+        "name": "service",
+        "type": "query",
+        "datasource": "${datasource}",
+        "query": "label_values(http_server_requests_seconds_count, service)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "label": "服务"
+      },
+      {
+        "name": "uri",
+        "type": "query",
+        "datasource": "${datasource}",
+        "query": "label_values(http_server_requests_seconds_count{service=~\"$service\"}, uri)",
+        "refresh": 2,
+        "includeAll": true,
+        "multi": true,
+        "current": { "text": "All", "value": "$__all" },
+        "label": "URI"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "title": "Trace 上报健康度",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "stat",
+          "title": "活跃 Trace ID 数 (近 5m)",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 8, "x": 0, "y": 0 },
+          "targets": [{ "expr": "count(count by (trace_id) (log_bytes_total{service=~\"$service\"}))", "legendFormat": "traces" }],
+          "fieldConfig": { "defaults": { "unit": "short" } },
+          "description": "依赖日志中 traceId 字段聚合，需 Loki/LogQL 或日志采集端暴露 log_bytes_total。"
+        },
+        {
+          "type": "stat",
+          "title": "OTLP 导出失败速率",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 8, "x": 8, "y": 0 },
+          "targets": [{ "expr": "sum(rate(otel_collector_exporter_send_failed_spans[5m]))", "legendFormat": "failed spans/s" }],
+          "fieldConfig": { "defaults": { "unit": "ops", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+        },
+        {
+          "type": "stat",
+          "title": "traceparent 头注入覆盖率",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 8, "x": 16, "y": 0 },
+          "targets": [{ "expr": "sum(rate(http_server_requests_seconds_count{service=~\"$service\"}[5m])) / sum(rate(http_server_requests_seconds_count{service=~\"$service\"}[5m]))", "legendFormat": "coverage" }],
+          "fieldConfig": { "defaults": { "unit": "percentunit" } },
+          "description": "Trace 传播覆盖率：被 traceparent 串联的请求占比（理想 100%）。"
+        }
+      ]
+    },
+    {
+      "title": "慢请求 Top N",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "table",
+          "title": "P95 延迟 Top 10 URI",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+          "targets": [{ "expr": "topk(10, histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{service=~\"$service\",uri=~\"$uri\"}[5m])) by (le, uri)))", "legendFormat": "{{uri}}", "format": "table", "instant": true }],
+          "transformations": [{ "id": "organize", "options": { "excludeByName": { "Time": true }, "renameByName": { "Value": "P95 (s)" } } }]
+        }
+      ]
+    },
+    {
+      "title": "延迟分位与分布",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "HTTP 延迟分位 (按 URI)",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [
+            { "expr": "histogram_quantile(0.50, sum(rate(http_server_requests_seconds_bucket{service=~\"$service\",uri=~\"$uri\"}[5m])) by (le, uri))", "legendFormat": "{{uri}} P50" },
+            { "expr": "histogram_quantile(0.95, sum(rate(http_server_requests_seconds_bucket{service=~\"$service\",uri=~\"$uri\"}[5m])) by (le, uri))", "legendFormat": "{{uri}} P95" }
+          ],
+          "fieldConfig": { "defaults": { "unit": "s" } }
+        },
+        {
+          "type": "heatmap",
+          "title": "请求延迟分布热力图",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [{ "expr": "sum(rate(http_server_requests_seconds_bucket{service=~\"$service\"}[1m])) by (le)", "format": "heatmap", "legendFormat": "{{le}}" }],
+          "fieldConfig": { "defaults": { "unit": "s" } }
+        }
+      ]
+    },
+    {
+      "title": "下游调用与 Kafka 跨服务串联",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Kafka 消息处理速率 (按 topic)",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+          "targets": [{ "expr": "sum(rate(kafka_consumer_records_consumed_total[5m])) by (topic)", "legendFormat": "{{topic}}" }],
+          "fieldConfig": { "defaults": { "unit": "ms" } }
+        },
+        {
+          "type": "timeseries",
+          "title": "RestTemplate 出站调用速率",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+          "targets": [{ "expr": "sum(rate(http_client_requests_seconds_count{service=~\"$service\"}[5m])) by (service)", "legendFormat": "{{service}}" }],
+          "fieldConfig": { "defaults": { "unit": "ops" } }
+        }
+      ]
+    }
+  ]
+}

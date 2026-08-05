@@ -1,0 +1,137 @@
+{
+  "title": "红方平台 - 告警与基础设施 (v5.4)",
+  "uid": "redteam-alert-infra",
+  "version": 1,
+  "schemaVersion": 39,
+  "description": "告警统计、Kafka/Redis/DB 基础设施、CPU/磁盘/网络、Druid 连接池与通知发送成功率。",
+  "tags": ["redteam", "alert", "infra", "v5.4"],
+  "timezone": "browser",
+  "time": { "from": "now-6h", "to": "now" },
+  "refresh": "1m",
+  "templating": {
+    "list": [
+      {
+        "name": "datasource",
+        "type": "datasource",
+        "query": "prometheus",
+        "current": { "text": "Prometheus", "value": "Prometheus" },
+        "hide": 0,
+        "label": "数据源"
+      }
+    ]
+  },
+  "rows": [
+    {
+      "title": "告警概览",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "stat",
+          "title": "Firing 告警数",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 0 },
+          "targets": [{ "expr": "count(ALERTS{alertstate=\"firing\"})", "legendFormat": "firing" }],
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+        },
+        {
+          "type": "stat",
+          "title": "P0 告警数",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 0 },
+          "targets": [{ "expr": "count(ALERTS{alertstate=\"firing\",severity=\"P0\"})", "legendFormat": "P0" }],
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "red", "value": 1 }] } } }
+        },
+        {
+          "type": "stat",
+          "title": "P1 告警数",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 0 },
+          "targets": [{ "expr": "count(ALERTS{alertstate=\"firing\",severity=\"P1\"})", "legendFormat": "P1" }],
+          "fieldConfig": { "defaults": { "unit": "short", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 1 }] } } }
+        },
+        {
+          "type": "stat",
+          "title": "飞书通知成功率",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 0 },
+          "targets": [{ "expr": "sum(rate(alert_notifications_total{result=\"success\"}[5m])) / sum(rate(alert_notifications_total[5m]))", "legendFormat": "success" }],
+          "fieldConfig": { "defaults": { "unit": "percentunit", "thresholds": { "mode": "absolute", "steps": [{ "color": "red", "value": null }, { "color": "orange", "value": 0.9 }, { "color": "green", "value": 0.99 }] } } }
+        }
+      ]
+    },
+    {
+      "title": "告警时间线",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "state-timeline",
+          "title": "告警状态时间线 (按 alertname)",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 24, "x": 0, "y": 0 },
+          "targets": [{ "expr": "ALERTS", "legendFormat": "{{alertname}} [{{severity}}]" }],
+          "fieldConfig": { "defaults": { "mappings": [{ "options": { "0": { "text": "ok", "color": "green" }, "1": { "text": "firing", "color": "red" } }, "type": "value" }] } }
+        }
+      ]
+    },
+    {
+      "title": "Kafka / Redis / DB",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "Kafka 消费者 Lag",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+          "targets": [{ "expr": "sum by (topic) (kafka_lag)", "legendFormat": "{{topic}}" }],
+          "fieldConfig": { "defaults": { "unit": "short" } }
+        },
+        {
+          "type": "timeseries",
+          "title": "Redis 命令速率",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+          "targets": [{ "expr": "sum(rate(redis_commands_processed_total[5m])) by (instance)", "legendFormat": "{{instance}}" }],
+          "fieldConfig": { "defaults": { "unit": "ops" } }
+        },
+        {
+          "type": "timeseries",
+          "title": "Druid 连接池活跃连接",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+          "targets": [{ "expr": "druid_active_connections", "legendFormat": "{{service}}" }],
+          "fieldConfig": { "defaults": { "unit": "short" } }
+        }
+      ]
+    },
+    {
+      "title": "主机资源",
+      "collapsed": false,
+      "panels": [
+        {
+          "type": "timeseries",
+          "title": "CPU 使用率",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+          "targets": [{ "expr": "100 - avg(rate(node_cpu_seconds_total{mode=\"idle\"}[5m])) by (instance) * 100", "legendFormat": "{{instance}}" }],
+          "fieldConfig": { "defaults": { "unit": "percent", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 70 }, { "color": "red", "value": 90 }] } } }
+        },
+        {
+          "type": "timeseries",
+          "title": "磁盘使用率",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+          "targets": [{ "expr": "100 - (node_filesystem_avail_bytes / node_filesystem_size_bytes) * 100", "legendFormat": "{{instance}} {{mountpoint}}" }],
+          "fieldConfig": { "defaults": { "unit": "percent", "thresholds": { "mode": "absolute", "steps": [{ "color": "green", "value": null }, { "color": "orange", "value": 75 }, { "color": "red", "value": 90 }] } } }
+        },
+        {
+          "type": "timeseries",
+          "title": "网络入站流量",
+          "datasource": "${datasource}",
+          "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+          "targets": [{ "expr": "rate(node_network_receive_bytes_total{device!~\"lo|veth.*\"}[5m])", "legendFormat": "{{instance}} {{device}}" }],
+          "fieldConfig": { "defaults": { "unit": "Bps" } }
+        }
+      ]
+    }
+  ]
+}

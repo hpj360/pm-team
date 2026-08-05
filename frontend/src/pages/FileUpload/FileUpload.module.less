@@ -1,0 +1,115 @@
+/**
+ * 文件上传页面样式
+ */
+
+.container {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.dragger {
+  :global(.ant-upload-drag) {
+    border: 2px dashed var(--color-border, #d9d9d9);
+    border-radius: var(--radius-lg, 8px);
+    transition: border-color 0.2s;
+
+    &:hover {
+      border-color: var(--color-primary, #f5222d);
+    }
+  }
+
+  .dragIcon {
+    color: var(--color-primary, #f5222d);
+    font-size: 48px;
+  }
+
+  .dragText {
+    font-size: 16px;
+    font-weight: 500;
+    margin: 8px 0 4px;
+  }
+
+  .dragHint {
+    color: var(--color-text-secondary, rgba(0, 0, 0, 0.45));
+    font-size: 13px;
+  }
+}
+
+.metaCard {
+  :global(.ant-card-body) {
+    padding: 16px 20px;
+  }
+}
+
+.taskCard {
+  :global(.ant-card-body) {
+    padding: 0 20px 16px;
+  }
+}
+
+.taskItem {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 0;
+  border-bottom: 1px solid var(--color-split, rgba(0, 0, 0, 0.06));
+
+  &:last-child {
+    border-bottom: none;
+  }
+}
+
+.taskInfo {
+  flex: 1;
+  min-width: 0;
+}
+
+.taskHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 4px;
+}
+
+.taskName {
+  font-weight: 500;
+  font-size: 13px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 360px;
+}
+
+.taskMeta {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--color-text-secondary, rgba(0, 0, 0, 0.45));
+  margin-bottom: 6px;
+}
+
+.taskActions {
+  display: flex;
+  gap: 4px;
+}
+
+.empty {
+  padding: 32px 0;
+  text-align: center;
+}
+
+.fileBadge {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--color-text-secondary, rgba(0, 0, 0, 0.45));
+}

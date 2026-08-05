@@ -1,0 +1,73 @@
+---
+# =============================================================================
+# 红方文件汇聚平台 - 公共配置 ConfigMap
+# 注意: 不包含敏感信息 (敏感信息走 Secret)
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: redteam-common-config
+  namespace: redteam-platform
+  labels:
+    app.kubernetes.io/part-of: redteam-platform
+data:
+  # ---- Java/JVM ----
+  JAVA_OPTS: >-
+    -XX:+UseContainerSupport
+    -XX:MaxRAMPercentage=75.0
+    -XX:+UseG1GC
+    -XX:MaxGCPauseMillis=200
+    -Djava.security.egd=file:/dev/./urandom
+    -Dfile.encoding=UTF-8
+    -Duser.timezone=Asia/Shanghai
+  SPRING_PROFILES_ACTIVE: "prod"
+  TZ: "Asia/Shanghai"
+
+  # ---- PostgreSQL ----
+  POSTGRES_HOST: "postgres.redteam-middleware.svc.cluster.local"
+  POSTGRES_PORT: "5432"
+
+  # ---- Redis ----
+  REDIS_HOST: "redis.redteam-middleware.svc.cluster.local"
+  REDIS_PORT: "6379"
+  REDIS_DATABASE: "0"
+
+  # ---- Elasticsearch ----
+  ES_HOST: "elasticsearch.redteam-middleware.svc.cluster.local"
+  ES_PORT: "9200"
+  ES_SCHEME: "http"
+
+  # ---- Milvus ----
+  MILVUS_HOST: "milvus.redteam-middleware.svc.cluster.local"
+  MILVUS_PORT: "19530"
+
+  # ---- Neo4j ----
+  NEO4J_HOST: "neo4j.redteam-middleware.svc.cluster.local"
+  NEO4J_BOLT_PORT: "7687"
+  NEO4J_HTTP_PORT: "7474"
+  NEO4J_USERNAME: "neo4j"
+
+  # ---- Kafka ----
+  KAFKA_BOOTSTRAP_SERVERS: "kafka.redteam-middleware.svc.cluster.local:9092"
+  KAFKA_CLIENT_ID: "redteam-platform"
+
+  # ---- MinIO ----
+  MINIO_ENDPOINT: "http://minio.redteam-middleware.svc.cluster.local:9000"
+  MINIO_BUCKET_DATA: "redteam-data"
+  MINIO_BUCKET_LOGS: "redteam-logs"
+
+  # ---- Nacos ----
+  NACOS_SERVER_ADDR: "nacos.redteam-middleware.svc.cluster.local:8848"
+  NACOS_NAMESPACE: "redteam-prod"
+  NACOS_USERNAME: "nacos"
+
+  # ---- JWT ----
+  JWT_EXPIRATION: "86400"
+
+  # ---- 日志 ----
+  LOG_LEVEL: "INFO"
+  LOG_PATH: "/app/logs"
+
+  # ---- 前端网关 ----
+  BACKEND_GATEWAY_HOST: "gateway"
+  BACKEND_GATEWAY_PORT: "8080"

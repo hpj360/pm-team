@@ -1,0 +1,926 @@
+openapi: 3.0.3
+info:
+  title: 红方文件汇聚平台 - 认证服务 API
+  description: |
+    认证授权服务，提供登录/登出/Token 刷新、用户/角色/权限管理能力。
+
+    - 服务端口：8080
+    - API 前缀：/api/v1
+    - 认证方式：Bearer JWT (SM2 国密签名)
+    - 限流策略：500 QPS / 租户
+  version: 1.0.0
+  contact:
+    name: 红方团队
+    email: redteam@example.com
+
+servers:
+  - url: http://localhost:8080
+    description: 本地开发环境
+  - url: https://api.redteam.internal/auth
+    description: 生产环境（网关路由）
+
+tags:
+  - name: 认证管理
+    description: 登录、登出、Token 刷新、验证码
+  - name: 用户管理
+    description: 用户 CRUD 与角色分配
+  - name: 角色管理
+    description: 角色 CRUD
+  - name: 权限管理
+    description: 权限查询
+
+paths:
+  # ============================================================================
+  # 认证管理
+  # ============================================================================
+  /api/v1/auth/login:
+    post:
+      tags: [认证管理]
+      summary: 用户登录
+      description: 用户名 + 密码 + 图形验证码登录，若开启 MFA 需二次提交 MFA 验证码。
+      operationId: login
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+            examples:
+              normal:
+                summary: 普通登录
+                value:
+                  username: admin
+                  password: "P@ssw0rd123"
+                  captcha_id: "cap_abc123"
+                  captcha_code: "A1B2"
+              mfa:
+                summary: MFA 二次提交
+                value:
+                  username: admin
+                  password: "P@ssw0rd123"
+                  captcha_id: "cap_abc123"
+                  captcha_code: "A1B2"
+                  mfa_token: "mfa_xyz789"
+                  mfa_code: "123456"
+      responses:
+        '200':
+          description: 登录成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResult'
+              example:
+                code: 200
+                message: 登录成功
+                data:
+                  access_token: "eyJhbGciOiJTTTIifQ..."
+                  refresh_token: "rf_abc123..."
+                  token_type: "Bearer"
+                  expires_in: 7200
+                  user:
+                    user_id: "u_001"
+                    username: admin
+                    display_name: 系统管理员
+                    roles: [ADMIN]
+                timestamp: 1785086825000
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '401':
+          description: 登录失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+              example:
+                code: 10001
+                message: 用户名或密码错误
+                data: null
+                timestamp: 1785086825000
+
+  /api/v1/auth/logout:
+    post:
+      tags: [认证管理]
+      summary: 用户登出
+      description: 注销当前 Token，加入黑名单。
+      operationId: logout
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 登出成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+              example:
+                code: 200
+                message: 登出成功
+                data: null
+                timestamp: 1785086825000
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  /api/v1/auth/refresh:
+    post:
+      tags: [认证管理]
+      summary: 刷新 Token
+      description: 使用 refreshToken 换取新的 accessToken。
+      operationId: refreshToken
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenRequest'
+      responses:
+        '200':
+          description: 刷新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TokenInfo'
+        '401':
+          description: 刷新令牌无效
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+              example:
+                code: 10010
+                message: 刷新令牌无效
+                data: null
+                timestamp: 1785086825000
+
+  /api/v1/auth/captcha:
+    get:
+      tags: [认证管理]
+      summary: 获取图形验证码
+      description: 返回 Base64 编码的验证码图片及 captchaId。
+      operationId: getCaptcha
+      responses:
+        '200':
+          description: 获取成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CaptchaResult'
+              example:
+                code: 200
+                message: 操作成功
+                data:
+                  captcha_id: "cap_abc123"
+                  image: "data:image/png;base64,iVBORw0KGgo..."
+                  expire_in: 300
+                timestamp: 1785086825000
+
+  /api/v1/auth/userinfo:
+    get:
+      tags: [认证管理]
+      summary: 获取当前登录用户信息
+      description: 根据 Token 解析当前用户详情、角色、权限。
+      operationId: getCurrentUser
+      security:
+        - BearerAuth: []
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+
+  # ============================================================================
+  # 用户管理
+  # ============================================================================
+  /api/v1/users:
+    post:
+      tags: [用户管理]
+      summary: 创建用户
+      operationId: createUser
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserCreateRequest'
+      responses:
+        '200':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '409':
+          description: 用户已存在
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+              example:
+                code: 10002
+                message: 用户已存在
+                data: null
+                timestamp: 1785086825000
+    get:
+      tags: [用户管理]
+      summary: 用户列表
+      description: 分页查询用户列表，支持按用户名/状态/部门过滤。
+      operationId: listUsers
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - name: username
+          in: query
+          description: 用户名（模糊匹配）
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: 账号状态
+          schema:
+            type: string
+            enum: [ACTIVE, DISABLED, LOCKED]
+        - name: departmentId
+          in: query
+          description: 部门 ID
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserPageResult'
+        '401':
+          $ref: '#/components/responses/Unauthorized'
+        '403':
+          $ref: '#/components/responses/Forbidden'
+
+  /api/v1/users/{userId}:
+    get:
+      tags: [用户管理]
+      summary: 用户详情
+      operationId: getUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    put:
+      tags: [用户管理]
+      summary: 更新用户
+      operationId: updateUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/UserUpdateRequest'
+      responses:
+        '200':
+          description: 更新成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/UserResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [用户管理]
+      summary: 删除用户
+      description: 逻辑删除，可恢复。
+      operationId: deleteUser
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/users/{userId}/roles:
+    post:
+      tags: [用户管理]
+      summary: 为用户分配角色
+      description: 全量覆盖用户角色列表。
+      operationId: assignUserRoles
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/UserIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                role_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: 角色 ID 列表（全量覆盖）
+              required: [role_ids]
+      responses:
+        '200':
+          description: 分配成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+
+  # ============================================================================
+  # 角色管理
+  # ============================================================================
+  /api/v1/roles:
+    get:
+      tags: [角色管理]
+      summary: 角色列表
+      operationId: listRoles
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - name: roleCode
+          in: query
+          description: 角色编码（模糊匹配）
+          schema:
+            type: string
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RolePageResult'
+    post:
+      tags: [角色管理]
+      summary: 创建角色
+      operationId: createRole
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RoleCreateRequest'
+      responses:
+        '200':
+          description: 创建成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/RoleResult'
+
+  # ============================================================================
+  # 权限管理
+  # ============================================================================
+  /api/v1/permissions:
+    get:
+      tags: [权限管理]
+      summary: 权限列表
+      description: 查询系统全部权限点，按资源类型分组。
+      operationId: listPermissions
+      security:
+        - BearerAuth: []
+      parameters:
+        - name: resourceType
+          in: query
+          description: 资源类型过滤
+          schema:
+            type: string
+            enum: [FILE, TARGET, TASK, REPORT, USER, ROLE, SYSTEM]
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Permission'
+
+components:
+  # ==========================================================================
+  # 安全方案
+  # ==========================================================================
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Bearer JWT (SM2 国密签名)
+
+  # ==========================================================================
+  # 通用参数
+  # ==========================================================================
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      description: 页码（从 1 开始）
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    SizeParam:
+      name: size
+      in: query
+      description: 每页大小（最大 100）
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    UserIdPath:
+      name: userId
+      in: path
+      description: 用户 ID
+      required: true
+      schema:
+        type: string
+
+  # ==========================================================================
+  # 通用响应
+  # ==========================================================================
+  responses:
+    BadRequest:
+      description: 参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+          example:
+            code: 400
+            message: 参数错误
+            data: null
+            timestamp: 1785086825000
+    Unauthorized:
+      description: 未认证
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+          example:
+            code: 401
+            message: 未授权，请先登录
+            data: null
+            timestamp: 1785086825000
+    Forbidden:
+      description: 无权限
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+          example:
+            code: 403
+            message: 禁止访问，权限不足
+            data: null
+            timestamp: 1785086825000
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+          example:
+            code: 404
+            message: 资源不存在
+            data: null
+            timestamp: 1785086825000
+    TooManyRequests:
+      description: 请求过于频繁
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+          example:
+            code: 429
+            message: 请求过于频繁，请稍后再试
+            data: null
+            timestamp: 1785086825000
+
+  # ==========================================================================
+  # Schema 定义
+  # ==========================================================================
+  schemas:
+    # --------------------------------------------------------------------------
+    # 通用包装
+    # --------------------------------------------------------------------------
+    ApiResult:
+      type: object
+      description: 统一响应格式
+      properties:
+        code:
+          type: integer
+          description: 响应码
+          example: 200
+        message:
+          type: string
+          description: 响应消息
+          example: 操作成功
+        data:
+          description: 响应数据（具体结构见各接口）
+          nullable: true
+        timestamp:
+          type: integer
+          format: int64
+          description: 服务器时间戳（毫秒）
+          example: 1785086825000
+      required: [code, message, timestamp]
+
+    PageData:
+      type: object
+      description: 统一分页数据
+      properties:
+        records:
+          type: array
+          description: 当前页数据列表
+          items: {}
+        total:
+          type: integer
+          format: int64
+          description: 总记录数
+          example: 128
+        page:
+          type: integer
+          description: 当前页码
+          example: 1
+        size:
+          type: integer
+          description: 每页大小
+          example: 20
+      required: [records, total, page, size]
+
+    # --------------------------------------------------------------------------
+    # 认证相关
+    # --------------------------------------------------------------------------
+    LoginRequest:
+      type: object
+      description: 登录请求
+      properties:
+        username:
+          type: string
+          description: 用户名
+          example: admin
+        password:
+          type: string
+          description: 密码（SM4 加密传输）
+          format: password
+          example: "P@ssw0rd123"
+        captcha_id:
+          type: string
+          description: 验证码 ID（来自 /auth/captcha）
+          example: cap_abc123
+        captcha_code:
+          type: string
+          description: 用户输入的验证码
+          example: A1B2
+        mfa_token:
+          type: string
+          description: MFA 临时令牌（首次登录返回 mfa_required 时使用）
+        mfa_code:
+          type: string
+          description: MFA 验证码（6 位数字）
+          example: "123456"
+      required: [username, password, captcha_id, captcha_code]
+
+    LoginResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/LoginData'
+
+    LoginData:
+      type: object
+      description: 登录返回数据
+      properties:
+        access_token:
+          type: string
+          description: 访问令牌
+        refresh_token:
+          type: string
+          description: 刷新令牌
+        token_type:
+          type: string
+          example: Bearer
+        expires_in:
+          type: integer
+          description: 过期时间（秒）
+          example: 7200
+        mfa_required:
+          type: boolean
+          description: 是否需要 MFA 二次验证
+          default: false
+        mfa_token:
+          type: string
+          description: MFA 临时令牌（mfa_required=true 时返回）
+        user:
+          $ref: '#/components/schemas/User'
+      required: [access_token, refresh_token, token_type, expires_in]
+
+    RefreshTokenRequest:
+      type: object
+      properties:
+        refresh_token:
+          type: string
+          description: 刷新令牌
+      required: [refresh_token]
+
+    TokenInfo:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                access_token:
+                  type: string
+                refresh_token:
+                  type: string
+                token_type:
+                  type: string
+                  example: Bearer
+                expires_in:
+                  type: integer
+                  example: 7200
+
+    CaptchaResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              type: object
+              properties:
+                captcha_id:
+                  type: string
+                  description: 验证码 ID
+                image:
+                  type: string
+                  description: Base64 编码的验证码图片
+                expire_in:
+                  type: integer
+                  description: 过期时间（秒）
+                  example: 300
+
+    # --------------------------------------------------------------------------
+    # 用户相关
+    # --------------------------------------------------------------------------
+    User:
+      type: object
+      description: 用户信息
+      properties:
+        user_id:
+          type: string
+          description: 用户 ID
+        username:
+          type: string
+          description: 用户名
+        display_name:
+          type: string
+          description: 显示名
+        email:
+          type: string
+          format: email
+          description: 邮箱
+        phone:
+          type: string
+          description: 手机号
+        avatar:
+          type: string
+          description: 头像 URL
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED, LOCKED]
+          description: 账号状态
+        department_id:
+          type: string
+          description: 部门 ID
+        department_name:
+          type: string
+          description: 部门名称
+        roles:
+          type: array
+          items:
+            $ref: '#/components/schemas/Role'
+        permissions:
+          type: array
+          items:
+            type: string
+          description: 权限编码列表
+        last_login_at:
+          type: integer
+          format: int64
+          description: 最近登录时间（毫秒）
+        created_at:
+          type: integer
+          format: int64
+          description: 创建时间（毫秒）
+        updated_at:
+          type: integer
+          format: int64
+          description: 更新时间（毫秒）
+
+    UserCreateRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          minLength: 3
+          maxLength: 32
+          description: 用户名（3-32 位字母数字下划线）
+        password:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 32
+          description: 密码（SM4 加密传输）
+        display_name:
+          type: string
+          description: 显示名
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        department_id:
+          type: string
+        role_ids:
+          type: array
+          items:
+            type: string
+          description: 角色 ID 列表
+      required: [username, password, display_name]
+
+    UserUpdateRequest:
+      type: object
+      properties:
+        display_name:
+          type: string
+        email:
+          type: string
+          format: email
+        phone:
+          type: string
+        department_id:
+          type: string
+        status:
+          type: string
+          enum: [ACTIVE, DISABLED, LOCKED]
+        password:
+          type: string
+          format: password
+          description: 重置密码（不填则不修改）
+
+    UserResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/User'
+
+    UserPageResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/PageData'
+                - type: object
+                  properties:
+                    records:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/User'
+
+    # --------------------------------------------------------------------------
+    # 角色相关
+    # --------------------------------------------------------------------------
+    Role:
+      type: object
+      description: 角色信息
+      properties:
+        role_id:
+          type: string
+        role_code:
+          type: string
+          description: 角色编码（如 ADMIN、ANALYST）
+        role_name:
+          type: string
+          description: 角色名称
+        description:
+          type: string
+        permissions:
+          type: array
+          items:
+            $ref: '#/components/schemas/Permission'
+        created_at:
+          type: integer
+          format: int64
+        updated_at:
+          type: integer
+          format: int64
+
+    RoleCreateRequest:
+      type: object
+      properties:
+        role_code:
+          type: string
+          description: 角色编码（唯一）
+        role_name:
+          type: string
+        description:
+          type: string
+        permission_ids:
+          type: array
+          items:
+            type: string
+      required: [role_code, role_name]
+
+    RoleResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/Role'
+
+    RolePageResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/PageData'
+                - type: object
+                  properties:
+                    records:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/Role'
+
+    # --------------------------------------------------------------------------
+    # 权限相关
+    # --------------------------------------------------------------------------
+    Permission:
+      type: object
+      description: 权限点
+      properties:
+        permission_id:
+          type: string
+        permission_code:
+          type: string
+          description: 权限编码（如 file:read）
+        permission_name:
+          type: string
+        resource_type:
+          type: string
+          enum: [FILE, TARGET, TASK, REPORT, USER, ROLE, SYSTEM]
+        action:
+          type: string
+          enum: [CREATE, READ, UPDATE, DELETE, EXPORT, SHARE]
+        description:
+          type: string

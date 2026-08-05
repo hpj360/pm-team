@@ -56,7 +56,19 @@ security:
     - /auth/login
     - /auth/register
     - /auth/captcha
+    - /auth/mfa/verify
     - /doc.html
     - /swagger-resources/**
     - /v3/api-docs/**
     - /webjars/**
+
+# 国密算法密钥配置（v2.3 新增）
+# 生产环境必须配置固定密钥，留空时启动会自动生成临时密钥（仅开发/测试）
+redteam:
+  crypto:
+    # SM4 对称密钥（Base64，16 字节）。留空则启动时自动生成
+    sm4-key:
+    # SM2 私钥（Base64 PKCS#8）。留空则启动时自动生成
+    sm2-private-key:
+    # SM2 公钥（Base64 X.509）。留空则启动时自动生成
+    sm2-public-key:

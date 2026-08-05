@@ -1,0 +1,7 @@
+# ==========================================
+# common 模块 SPI 注册 (v5.4)
+# EnvironmentPostProcessor: 注入 actuator/Prometheus 端点默认配置
+# 注意：Spring Boot 3 仍通过 spring.factories 注册 EnvironmentPostProcessor
+# ==========================================
+org.springframework.boot.env.EnvironmentPostProcessor=\
+com.redteam.common.telemetry.TelemetryEnvironmentPostProcessor

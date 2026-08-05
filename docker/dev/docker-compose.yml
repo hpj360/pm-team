@@ -1,0 +1,320 @@
+# =============================================================================
+# 红方文件汇聚平台 - 开发环境完整编排
+# 包含所有中间件 + 基础设施服务
+# 启动: docker compose -f docker/dev/docker-compose.yml --env-file docker/dev/.env up -d
+# =============================================================================
+version: "3.9"
+
+networks:
+  redteam-net:
+    name: redteam-net
+    driver: bridge
+
+volumes:
+  postgres-data:
+  redis-data:
+  es-data:
+  neo4j-data:
+  neo4j-logs:
+  minio-data:
+  nacos-data:
+  kafka-data:
+  milvus-etcd:
+  milvus-minio:
+  milvus-data:
+
+services:
+  # ---------------------------------------------------------------------------
+  # PostgreSQL 15 (含 Citus 扩展)
+  # ---------------------------------------------------------------------------
+  postgres:
+    image: postgres:15
+    container_name: redteam-postgres
+    restart: unless-stopped
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-redteam}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-redteam123}
+      POSTGRES_DB: ${POSTGRES_DB:-postgres}
+      TZ: Asia/Shanghai
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-redteam} -d ${POSTGRES_DB:-postgres}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 30s
+    networks: [redteam-net]
+
+  # ---------------------------------------------------------------------------
+  # Redis 7
+  # ---------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: redteam-redis
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redteam123}
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redteam123}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks: [redteam-net]
+
+  # ---------------------------------------------------------------------------
+  # Elasticsearch 8 (单节点, xpack 禁用)
+  # ---------------------------------------------------------------------------
+  elasticsearch:
+    image: docker.elastic.co/elasticsearch/elasticsearch:8.11.0
+    container_name: redteam-elasticsearch
+    restart: unless-stopped
+    ports:
+      - "9200:9200"
+      - "9300:9300"
+    environment:
+      - discovery.type=single-node
+      - xpack.security.enabled=false
+      - xpack.security.transport.ssl.enabled=false
+      - xpack.ml.enabled=false
+      - ES_JAVA_OPTS=-Xms1g -Xmx1g
+      - cluster.name=redteam-es
+      - bootstrap.memory_lock=true
+      - TZ=Asia/Shanghai
+    ulimits:
+      memlock:
+        soft: -1
+        hard: -1
+      nofile:
+        soft: 65536
+        hard: 65536
+    volumes:
+      - es-data:/usr/share/elasticsearch/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:9200/_cluster/health || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 15
+      start_period: 60s
+    networks: [redteam-net]
+
+  # ---------------------------------------------------------------------------
+  # Milvus 2.3 依赖: etcd
+  # ---------------------------------------------------------------------------
+  milvus-etcd:
+    image: quay.io/coreos/etcd:v3.5.5
+    container_name: redteam-milvus-etcd
+    restart: unless-stopped
+    environment:
+      - ETCD_AUTO_COMPACTION_MODE=revision
+      - ETCD_AUTO_COMPACTION_RETENTION=1000
+      - ETCD_QUOTA_BACKEND_BYTES=4294967296
+      - ETCD_SNAPSHOT_COUNT=50000
+    volumes:
+      - milvus-etcd:/etcd
+    command: etcd -advertise-client-urls=http://127.0.0.1:2379 -listen-client-urls http://0.0.0.0:2379 --data-dir /etcd
+    healthcheck:
+      test: ["CMD", "etcdctl", "endpoint", "health"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 10s
+    networks: [redteam-net]
+
+  # ---------------------------------------------------------------------------
+  # Milvus 2.3 依赖: minio (Milvus 内部使用)
+  # ---------------------------------------------------------------------------
+  milvus-minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: redteam-milvus-minio
+    restart: unless-stopped
+    environment:
+      MINIO_ACCESS_KEY: minioadmin
+      MINIO_SECRET_KEY: minioadmin
+    volumes:
+      - milvus-minio:/minio_data
+    command: minio server /minio_data --console-address ":9002"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+      start_period: 10s
+    networks: [redteam-net]
+
+  # ---------------------------------------------------------------------------
+  # Milvus 2.3 Standalone
+  # ---------------------------------------------------------------------------
+  milvus:
+    image: milvusdb/milvus:v2.3.3
+    container_name: redteam-milvus
+    restart: unless-stopped
+    command: ["milvus", "run", "standalone"]
+    ports:
+      - "19530:19530"
+      - "9091:9091"
+    environment:
+      ETCD_ENDPOINTS: milvus-etcd:2379
+      MINIO_ADDRESS: milvus-minio:9000
+      MINIO_ACCESS_KEY_ID: minioadmin
+      MINIO_SECRET_ACCESS_KEY: minioadmin
+      MINIO_USE_SSL: "false"
+    volumes:
+      - milvus-data:/var/lib/milvus
+    depends_on:
+      milvus-etcd:
+        condition: service_healthy
+      milvus-minio:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9091/healthz"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 90s
+    networks: [redteam-net]
+
+  # ---------------------------------------------------------------------------
+  # Neo4j 5
+  # ---------------------------------------------------------------------------
+  neo4j:
+    image: neo4j:5
+    container_name: redteam-neo4j
+    restart: unless-stopped
+    ports:
+      - "7474:7474"
+      - "7687:7687"
+    environment:
+      - NEO4J_AUTH=neo4j/${NEO4J_PASSWORD:-redteam123}
+      - NEO4J_PLUGINS=["apoc"]
+      - NEO4J_dbms_security_procedures_unrestricted=apoc.*
+      - NEO4J_dbms_memory_heap_initial__size=512m
+      - NEO4J_dbms_memory_heap_max__size=1G
+      - TZ=Asia/Shanghai
+    volumes:
+      - neo4j-data:/data
+      - neo4j-logs:/logs
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q -O - http://localhost:7474 || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks: [redteam-net]
+
+  # ---------------------------------------------------------------------------
+  # Kafka 3.6 (KRaft 模式, 无 Zookeeper)
+  # ---------------------------------------------------------------------------
+  kafka:
+    image: bitnami/kafka:3.6
+    container_name: redteam-kafka
+    restart: unless-stopped
+    ports:
+      - "9092:9092"
+      - "9094:9094"
+    environment:
+      # KRaft 模式配置
+      KAFKA_CFG_NODE_ID: 1
+      KAFKA_CFG_PROCESS_ROLES: controller,broker
+      KAFKA_CFG_CONTROLLER_QUORUM_VOTERS: 1@kafka:9093
+      KAFKA_CFG_LISTENERS: PLAINTEXT://:9092,CONTROLLER://:9093,EXTERNAL://:9094
+      KAFKA_CFG_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,EXTERNAL://localhost:9094
+      KAFKA_CFG_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,EXTERNAL:PLAINTEXT
+      KAFKA_CFG_CONTROLLER_LISTENER_NAMES: CONTROLLER
+      KAFKA_CFG_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_CFG_AUTO_CREATE_TOPICS_ENABLE: "true"
+      ALLOW_PLAINTEXT_LISTENER: "yes"
+    volumes:
+      - kafka-data:/bitnami/kafka
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics.sh --bootstrap-server localhost:9092 --list || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks: [redteam-net]
+
+  # ---------------------------------------------------------------------------
+  # MinIO (应用层: 数据/日志两个 bucket)
+  # ---------------------------------------------------------------------------
+  minio:
+    image: minio/minio:RELEASE.2023-03-20T20-16-18Z
+    container_name: redteam-minio
+    restart: unless-stopped
+    ports:
+      - "9000:9000"
+      - "9001:9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ACCESS_KEY:-redteam}
+      MINIO_ROOT_PASSWORD: ${MINIO_SECRET_KEY:-redteam123}
+    volumes:
+      - minio-data:/data
+    command: server /data --console-address ":9001"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 30s
+    networks: [redteam-net]
+
+  # MinIO 初始化: 创建 bucket
+  minio-init:
+    image: minio/mc:RELEASE.2023-03-20T20-16-18Z
+    container_name: redteam-minio-init
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MINIO_ACCESS_KEY: ${MINIO_ACCESS_KEY:-redteam}
+      MINIO_SECRET_KEY: ${MINIO_SECRET_KEY:-redteam123}
+    entrypoint:
+      - /bin/sh
+      - -c
+      - |
+        mc alias set local http://minio:9000 "$${MINIO_ACCESS_KEY}" "$${MINIO_SECRET_KEY}";
+        mc mb local/redteam-data --ignore-existing;
+        mc mb local/redteam-logs --ignore-existing;
+        mc anonymous set download local/redteam-data;
+        echo "MinIO buckets initialized.";
+        exit 0;
+    networks: [redteam-net]
+
+  # ---------------------------------------------------------------------------
+  # Nacos 2.x (单机模式)
+  # ---------------------------------------------------------------------------
+  nacos:
+    image: nacos/nacos-server:v2.3.0
+    container_name: redteam-nacos
+    restart: unless-stopped
+    ports:
+      - "8848:8848"
+      - "9848:9848"
+      - "9849:9849"
+    environment:
+      - MODE=standalone
+      - PREFER_HOST_MODE=hostname
+      - NACOS_AUTH_ENABLE=true
+      - NACOS_AUTH_TOKEN=${NACOS_AUTH_TOKEN:-SecretKey012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789}
+      - NACOS_AUTH_IDENTITY_KEY=${NACOS_AUTH_IDENTITY_KEY:-nacos}
+      - NACOS_AUTH_IDENTITY_VALUE=${NACOS_AUTH_IDENTITY_VALUE:-nacos}
+      - JVM_XMS=512m
+      - JVM_XMX=512m
+      - JVM_XMN=256m
+      - TZ=Asia/Shanghai
+    volumes:
+      - nacos-data:/home/nacos/data
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fs http://localhost:8848/nacos/v1/console/health/readiness || exit 1"]
+      interval: 15s
+      timeout: 10s
+      retries: 10
+      start_period: 60s
+    networks: [redteam-net]

@@ -1,0 +1,88 @@
+/**
+ * Design Token 转 CSS 变量
+ * 便于在 Less / CSS Modules 中通过 var(--xxx) 使用
+ */
+
+:root {
+  /* 品牌色 */
+  --color-primary-50: #fff1f0;
+  --color-primary-100: #ffccc7;
+  --color-primary-200: #ffa39e;
+  --color-primary-300: #ff7875;
+  --color-primary-400: #ff4d4f;
+  --color-primary-500: #f5222d;
+  --color-primary-600: #cf1322;
+  --color-primary-700: #a8071a;
+  --color-primary-800: #820014;
+  --color-primary-900: #5c0011;
+
+  /* 中性色 */
+  --color-neutral-50: #fafafa;
+  --color-neutral-100: #f5f5f5;
+  --color-neutral-200: #e8e8e8;
+  --color-neutral-300: #d9d9d9;
+  --color-neutral-400: #bfbfbf;
+  --color-neutral-500: #8c8c8c;
+  --color-neutral-600: #595959;
+  --color-neutral-700: #434343;
+  --color-neutral-800: #262626;
+  --color-neutral-900: #141414;
+
+  /* 功能色 */
+  --color-success: #52c41a;
+  --color-warning: #faad14;
+  --color-error: #f5222d;
+  --color-info: #1890ff;
+
+  /* 严重程度 */
+  --color-severity-info: #1890ff;
+  --color-severity-low: #52c41a;
+  --color-severity-medium: #faad14;
+  --color-severity-high: #fa541c;
+  --color-severity-critical: #f5222d;
+
+  /* 敏感等级 */
+  --color-sensitivity-l1: #52c41a;
+  --color-sensitivity-l2: #1890ff;
+  --color-sensitivity-l3: #faad14;
+  --color-sensitivity-l4: #fa541c;
+  --color-sensitivity-l5: #f5222d;
+
+  /* 背景 */
+  --color-bg: #f0f2f5;
+  --color-surface: #ffffff;
+  --color-border: #f0f0f0;
+  --color-text: rgba(0, 0, 0, 0.85);
+
+  /* 字体 */
+  --font-family-sans: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, 'PingFang SC', 'Microsoft YaHei', sans-serif;
+  --font-family-mono: 'SF Mono', Monaco, Menlo, Consolas, 'Courier New', monospace;
+
+  /* 圆角 */
+  --radius-sm: 2px;
+  --radius-base: 4px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --radius-xl: 12px;
+
+  /* 阴影 */
+  --shadow-sm: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  --shadow-base: 0 1px 3px 0 rgba(0, 0, 0, 0.1), 0 1px 2px 0 rgba(0, 0, 0, 0.06);
+  --shadow-md: 0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+  --shadow-lg: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+
+  /* 动效 */
+  --motion-duration-fast: 150ms;
+  --motion-duration-base: 300ms;
+  --motion-duration-slow: 500ms;
+  --motion-easing: cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+/* 暗黑主题覆盖 */
+[data-theme='dark'] {
+  --color-bg: #141414;
+  --color-surface: #1f1f1f;
+  --color-border: #303030;
+  --color-text: #f0f0f0;
+}

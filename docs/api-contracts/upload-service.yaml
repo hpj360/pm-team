@@ -1,0 +1,786 @@
+openapi: 3.0.3
+info:
+  title: 红方文件汇聚平台 - 文件上传服务 API
+  description: |
+    文件上传服务，提供单/分片上传、秒传、下载、版本管理、分享能力。
+
+    - 服务端口：8081
+    - API 前缀：/api/v1
+    - 认证方式：Bearer JWT
+    - 限流策略：1000 QPS / 租户
+    - 存储后端：MinIO
+  version: 1.0.0
+  contact:
+    name: 红方团队
+    email: redteam@example.com
+
+servers:
+  - url: http://localhost:8081
+    description: 本地开发环境
+  - url: https://api.redteam.internal/upload
+    description: 生产环境
+
+tags:
+  - name: 文件上传
+    description: 单文件、分片上传、秒传检查
+  - name: 文件管理
+    description: 文件查询、删除、批量下载
+  - name: 文件分享
+    description: 生成分享链接
+  - name: 版本管理
+    description: 版本列表与回滚
+
+paths:
+  # ============================================================================
+  # 文件上传
+  # ============================================================================
+  /api/v1/files/upload:
+    post:
+      tags: [文件上传]
+      summary: 单文件上传
+      description: 直接上传单个文件，适用于小文件（< 100MB）。
+      operationId: uploadFile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: 文件二进制
+                target_id:
+                  type: string
+                  description: 关联目标 ID（可选）
+                tags:
+                  type: array
+                  items:
+                    type: string
+                  description: 标签列表
+                is_sensitive:
+                  type: boolean
+                  description: 是否敏感文件（敏感文件加密存储）
+                  default: false
+              required: [file]
+      responses:
+        '200':
+          description: 上传成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileResult'
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '413':
+          description: 文件过大
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+              example:
+                code: 20003
+                message: 文件大小超过限制
+                data: null
+                timestamp: 1785086825000
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/v1/files/upload/chunk:
+    post:
+      tags: [文件上传]
+      summary: 分片上传
+      description: 上传文件分片，适用于大文件（>= 100MB）。需先调用 /files/check 获取 uploadId。
+      operationId: uploadChunk
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              properties:
+                upload_id:
+                  type: string
+                  description: 上传会话 ID（来自 /files/check）
+                chunk_index:
+                  type: integer
+                  description: 分片序号（从 0 开始）
+                  example: 0
+                chunk_total:
+                  type: integer
+                  description: 分片总数
+                  example: 10
+                chunk:
+                  type: string
+                  format: binary
+                  description: 分片二进制
+                sha256:
+                  type: string
+                  description: 分片 SHA256（用于校验）
+              required: [upload_id, chunk_index, chunk_total, chunk]
+      responses:
+        '200':
+          description: 分片上传成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          upload_id:
+                            type: string
+                          chunk_index:
+                            type: integer
+                          uploaded:
+                            type: integer
+                            description: 已上传分片数
+        '400':
+          $ref: '#/components/responses/BadRequest'
+        '429':
+          $ref: '#/components/responses/TooManyRequests'
+
+  /api/v1/files/upload/merge:
+    post:
+      tags: [文件上传]
+      summary: 合并分片
+      description: 所有分片上传完成后调用，触发服务端合并。
+      operationId: mergeChunks
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                upload_id:
+                  type: string
+                  description: 上传会话 ID
+                file_name:
+                  type: string
+                  description: 原始文件名
+                chunk_total:
+                  type: integer
+                  description: 分片总数
+                target_id:
+                  type: string
+                tags:
+                  type: array
+                  items:
+                    type: string
+              required: [upload_id, file_name, chunk_total]
+      responses:
+        '200':
+          description: 合并成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileResult'
+        '409':
+          description: 分片不完整或校验失败
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+              example:
+                code: 20008
+                message: 分片合并失败
+                data: null
+                timestamp: 1785086825000
+
+  /api/v1/files/check:
+    post:
+      tags: [文件上传]
+      summary: 秒传检查
+      description: 上传前根据文件指纹检查是否已存在，命中则秒传。
+      operationId: checkFile
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file_name:
+                  type: string
+                file_size:
+                  type: integer
+                  format: int64
+                md5:
+                  type: string
+                  description: 文件 MD5
+                sha256:
+                  type: string
+                  description: 文件 SHA256
+                chunk_size:
+                  type: integer
+                  description: 分片大小（字节），用于分片上传时计算分片数
+                  example: 10485760
+              required: [file_name, file_size, sha256]
+      responses:
+        '200':
+          description: 检查完成
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        $ref: '#/components/schemas/FileCheckResult'
+
+  # ============================================================================
+  # 文件管理
+  # ============================================================================
+  /api/v1/files:
+    get:
+      tags: [文件管理]
+      summary: 文件列表
+      description: 分页查询文件，支持按名称/类型/状态/标签/时间过滤。
+      operationId: listFiles
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/PageParam'
+        - $ref: '#/components/parameters/SizeParam'
+        - name: name
+          in: query
+          description: 文件名（模糊匹配）
+          schema:
+            type: string
+        - name: extension
+          in: query
+          description: 文件后缀
+          schema:
+            type: string
+        - name: status
+          in: query
+          description: 文件状态
+          schema:
+            type: string
+            enum: [UPLOADING, UPLOADED, PARSING, PARSED, ANALYZING, ANALYZED, FAILED]
+        - name: targetId
+          in: query
+          description: 关联目标 ID
+          schema:
+            type: string
+        - name: tag
+          in: query
+          description: 标签
+          schema:
+            type: string
+        - name: startTime
+          in: query
+          description: 创建起始时间（毫秒时间戳）
+          schema:
+            type: integer
+            format: int64
+        - name: endTime
+          in: query
+          description: 创建结束时间（毫秒时间戳）
+          schema:
+            type: integer
+            format: int64
+        - name: sortField
+          in: query
+          description: 排序字段
+          schema:
+            type: string
+            enum: [created_at, size, name]
+            default: created_at
+        - name: sortOrder
+          in: query
+          schema:
+            type: string
+            enum: [asc, desc]
+            default: desc
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FilePageResult'
+
+  /api/v1/files/{fileId}:
+    get:
+      tags: [文件管理]
+      summary: 文件详情
+      operationId: getFile
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+    delete:
+      tags: [文件管理]
+      summary: 删除文件
+      description: 逻辑删除文件及其版本，关联解析/分析数据保留。
+      operationId: deleteFile
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      responses:
+        '200':
+          description: 删除成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ApiResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/files/download/{fileId}:
+    post:
+      tags: [文件管理]
+      summary: 下载文件
+      description: 返回文件流或临时下载 URL（带签名，有效期 15 分钟）。
+      operationId: downloadFile
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                mode:
+                  type: string
+                  enum: [URL, STREAM]
+                  default: URL
+                  description: 下载模式，URL 返回签名链接，STREAM 直接返回文件流
+                version:
+                  type: integer
+                  description: 指定版本号（不填为当前版本）
+      responses:
+        '200':
+          description: 下载成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          download_url:
+                            type: string
+                            description: 签名下载 URL
+                          expire_in:
+                            type: integer
+                            description: URL 有效期（秒）
+                            example: 900
+                          file_name:
+                            type: string
+                          size:
+                            type: integer
+                            format: int64
+            application/octet-stream:
+              schema:
+                type: string
+                format: binary
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+  /api/v1/files/batch-download:
+    post:
+      tags: [文件管理]
+      summary: 批量下载
+      description: 打包为 ZIP 后返回下载 URL。
+      operationId: batchDownload
+      security:
+        - BearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                file_ids:
+                  type: array
+                  items:
+                    type: string
+                  description: 文件 ID 列表（最多 100 个）
+              required: [file_ids]
+      responses:
+        '200':
+          description: 打包完成
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          download_url:
+                            type: string
+                          expire_in:
+                            type: integer
+                          file_count:
+                            type: integer
+
+  # ============================================================================
+  # 文件分享
+  # ============================================================================
+  /api/v1/files/{fileId}/share:
+    post:
+      tags: [文件分享]
+      summary: 生成分享链接
+      description: 生成带有效期与访问密码的分享链接。
+      operationId: shareFile
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                expire_in:
+                  type: integer
+                  description: 有效期（秒），最大 7 天
+                  example: 86400
+                password:
+                  type: string
+                  description: 访问密码（可选）
+                max_access_count:
+                  type: integer
+                  description: 最大访问次数（0 表示不限）
+                  default: 0
+                allowed_users:
+                  type: array
+                  items:
+                    type: string
+                  description: 允许访问的用户 ID 列表（可选）
+      responses:
+        '200':
+          description: 生成成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: object
+                        properties:
+                          share_id:
+                            type: string
+                          share_url:
+                            type: string
+                          share_code:
+                            type: string
+                            description: 提取码
+                          expire_at:
+                            type: integer
+                            format: int64
+
+  # ============================================================================
+  # 版本管理
+  # ============================================================================
+  /api/v1/files/{fileId}/versions:
+    get:
+      tags: [版本管理]
+      summary: 版本列表
+      description: 查询文件所有历史版本。
+      operationId: listFileVersions
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      responses:
+        '200':
+          description: 查询成功
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/ApiResult'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/FileVersion'
+
+  /api/v1/files/{fileId}/rollback:
+    post:
+      tags: [版本管理]
+      summary: 版本回滚
+      description: 将文件回滚到指定历史版本，原版本保留为新版本。
+      operationId: rollbackFile
+      security:
+        - BearerAuth: []
+      parameters:
+        - $ref: '#/components/parameters/FileIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                target_version:
+                  type: integer
+                  description: 目标版本号
+                reason:
+                  type: string
+                  description: 回滚原因
+              required: [target_version]
+      responses:
+        '200':
+          description: 回滚成功
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/FileResult'
+        '404':
+          $ref: '#/components/responses/NotFound'
+
+components:
+  securitySchemes:
+    BearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  parameters:
+    PageParam:
+      name: page
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    SizeParam:
+      name: size
+      in: query
+      schema:
+        type: integer
+        minimum: 1
+        maximum: 100
+        default: 20
+    FileIdPath:
+      name: fileId
+      in: path
+      required: true
+      schema:
+        type: string
+
+  responses:
+    BadRequest:
+      description: 参数错误
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+    NotFound:
+      description: 资源不存在
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+          example:
+            code: 20001
+            message: 文件不存在
+            data: null
+            timestamp: 1785086825000
+    TooManyRequests:
+      description: 请求过于频繁
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ApiResult'
+
+  schemas:
+    ApiResult:
+      type: object
+      properties:
+        code:
+          type: integer
+        message:
+          type: string
+        data:
+          nullable: true
+        timestamp:
+          type: integer
+          format: int64
+      required: [code, message, timestamp]
+
+    PageData:
+      type: object
+      properties:
+        records:
+          type: array
+          items: {}
+        total:
+          type: integer
+          format: int64
+        page:
+          type: integer
+        size:
+          type: integer
+      required: [records, total, page, size]
+
+    FileInfo:
+      type: object
+      description: 文件元信息
+      properties:
+        file_id:
+          type: string
+          description: 文件 ID
+        name:
+          type: string
+          description: 文件名
+        path:
+          type: string
+          description: 对象存储 key
+        size:
+          type: integer
+          format: int64
+          description: 文件大小（字节）
+        mime_type:
+          type: string
+          description: MIME 类型
+        extension:
+          type: string
+          description: 文件后缀
+        md5:
+          type: string
+        sha256:
+          type: string
+        status:
+          type: string
+          enum: [UPLOADING, UPLOADED, PARSING, PARSED, ANALYZING, ANALYZED, FAILED]
+          description: 文件状态
+        uploader_id:
+          type: string
+          description: 上传者用户 ID
+        uploader_name:
+          type: string
+        target_id:
+          type: string
+          description: 关联目标 ID
+        tags:
+          type: array
+          items:
+            type: string
+        is_sensitive:
+          type: boolean
+          description: 是否敏感文件
+        version:
+          type: integer
+          description: 当前版本号
+        bucket:
+          type: string
+          description: 存储桶
+        created_at:
+          type: integer
+          format: int64
+        updated_at:
+          type: integer
+          format: int64
+
+    FileCheckResult:
+      type: object
+      description: 秒传检查结果
+      properties:
+        exists:
+          type: boolean
+          description: 是否已存在（true=秒传命中）
+        file_id:
+          type: string
+          description: 已存在文件的 ID（exists=true 时返回）
+        upload_id:
+          type: string
+          description: 上传会话 ID（exists=false 时返回，用于分片上传）
+        chunk_size:
+          type: integer
+          description: 建议分片大小（字节）
+        chunk_total:
+          type: integer
+          description: 分片总数
+
+    FileVersion:
+      type: object
+      description: 文件版本
+      properties:
+        version:
+          type: integer
+          description: 版本号
+        file_id:
+          type: string
+        name:
+          type: string
+        size:
+          type: integer
+          format: int64
+        sha256:
+          type: string
+        uploader_id:
+          type: string
+        uploader_name:
+          type: string
+        remark:
+          type: string
+          description: 版本备注
+        created_at:
+          type: integer
+          format: int64
+
+    FileResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              $ref: '#/components/schemas/FileInfo'
+
+    FilePageResult:
+      allOf:
+        - $ref: '#/components/schemas/ApiResult'
+        - type: object
+          properties:
+            data:
+              allOf:
+                - $ref: '#/components/schemas/PageData'
+                - type: object
+                  properties:
+                    records:
+                      type: array
+                      items:
+                        $ref: '#/components/schemas/FileInfo'
