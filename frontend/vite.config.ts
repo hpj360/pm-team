@@ -5,6 +5,10 @@ import path from 'path';
 // https://vite.dev/config/
 export default defineConfig({
   plugins: [react()],
+  // 兼容 sockjs-client 等老库对 Node.js global 的引用
+  define: {
+    global: 'globalThis',
+  },
   resolve: {
     alias: {
       // 配置路径别名
