@@ -260,6 +260,12 @@
         "primaryAgent": "tech-writer",
         "consumers": ["all"],
         "usage": "Tech-writer 维护知识库；所有 Agent 检索项目知识与文档"
+      },
+      {
+        "skill": "grounded-citations",
+        "primaryAgent": "requirement-analyst",
+        "consumers": ["architect", "security-engineer", "code-reviewer", "tester"],
+        "usage": "验证文档中的数据来源、技术声明和事实论断。Requirement-analyst 验证 PRD 数据来源；Architect 验证技术方案；Security-engineer 验证安全报告；Code-reviewer 验证技术声明；Tester 验证测试报告数据"
       }
     ]
   },
@@ -302,11 +308,25 @@
         "requireApproval": true
       },
       {
+        "name": "需求验证",
+        "skill": "grounded-citations",
+        "input": "PRD文档",
+        "output": "需求验证报告",
+        "description": "验证PRD文档中的数据来源、市场调研数据和竞品分析的事实依据"
+      },
+      {
         "name": "架构设计",
         "agent": "architect",
         "output": "技术架构方案",
         "description": "设计系统架构和技术选型",
         "requireApproval": true
+      },
+      {
+        "name": "架构方案验证",
+        "skill": "grounded-citations",
+        "input": "技术架构方案",
+        "output": "架构验证报告",
+        "description": "验证技术方案中引用的技术资料、性能指标和约束条件的来源"
       },
       {
         "name": "数据库设计",
@@ -368,6 +388,13 @@
         "output": "安全审计报告",
         "description": "进行安全审计和漏洞扫描",
         "requireApproval": true
+      },
+      {
+        "name": "安全报告验证",
+        "skill": "grounded-citations",
+        "input": "安全审计报告",
+        "output": "安全验证报告",
+        "description": "验证安全报告中的漏洞数据、风险评估和CVE编号的来源"
       },
       {
         "name": "测试验证",
