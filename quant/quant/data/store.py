@@ -37,6 +37,14 @@ CREATE TABLE IF NOT EXISTS signals(
     direction VARCHAR, rule_id VARCHAR, created_at TIMESTAMP);
 CREATE TABLE IF NOT EXISTS dq_events(
     ts TIMESTAMP, kind VARCHAR, symbol VARCHAR, detail VARCHAR);
+CREATE TABLE IF NOT EXISTS orders(
+    id BIGINT PRIMARY KEY, ts TIMESTAMP, signal_id BIGINT, instrument_id VARCHAR,
+    market VARCHAR, side VARCHAR, price DOUBLE, qty DOUBLE, amount DOUBLE,
+    fee DOUBLE, slippage DOUBLE, account VARCHAR, status VARCHAR, note VARCHAR,
+    created_at TIMESTAMP);
+CREATE TABLE IF NOT EXISTS accounts(
+    ts TIMESTAMP, account VARCHAR, cash DOUBLE, positions_json VARCHAR,
+    created_at TIMESTAMP);
 """
 
 BAR_COLS = ["ts", "open", "high", "low", "close", "volume"]
@@ -182,6 +190,50 @@ class Store:
         return self.conn.execute(
             "SELECT * FROM dq_events ORDER BY ts DESC LIMIT ?", [limit]
         ).fetchdf()
+
+    # ---------- 订单与账户（M7 模拟盘 / M8 实盘共用） ----------
+    def add_order(self, ts, signal_id, instrument_id: str, market: str, side: str,
+                  price: float, qty: float, amount: float, fee: float = 0.0,
+                  slippage: float = 0.0, account: str = "paper", status: str = "filled",
+                  note: str = "") -> int:
+        row = self.conn.execute("SELECT coalesce(max(id), 0) + 1 FROM orders").fetchone()
+        new_id = int(row[0])
+        ts = ts if ts is not None else pd.Timestamp.now()
+        self.conn.execute(
+            "INSERT INTO orders VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            [new_id, pd.Timestamp(ts), signal_id, instrument_id, market, side,
+             float(price), float(qty), float(amount), float(fee), float(slippage),
+             account, status, note, pd.Timestamp.now()],
+        )
+        return new_id
+
+    def get_orders(self, account: str | None = None, limit: int = 100) -> pd.DataFrame:
+        if account:
+            return self.conn.execute(
+                "SELECT * FROM orders WHERE account = ? ORDER BY created_at DESC, id DESC LIMIT ?",
+                [account, limit],
+            ).fetchdf()
+        return self.conn.execute(
+            "SELECT * FROM orders ORDER BY created_at DESC, id DESC LIMIT ?", [limit]
+        ).fetchdf()
+
+    def save_account(self, account: str, cash: float, positions: dict,
+                     ts=None) -> None:
+        import json
+
+        ts = ts or pd.Timestamp.now()
+        self.conn.execute(
+            "INSERT INTO accounts VALUES (?, ?, ?, ?, ?)",
+            [pd.Timestamp(ts), account, float(cash),
+             json.dumps(positions, ensure_ascii=False), pd.Timestamp.now()],
+        )
+
+    def latest_account(self, account: str = "paper"):
+        row = self.conn.execute(
+            "SELECT ts, cash, positions_json FROM accounts WHERE account = ? "
+            "ORDER BY ts DESC LIMIT 1", [account],
+        ).fetchone()
+        return row  # (ts, cash, positions_json) or None
 
     # ---------- 冷备 ----------
     def snapshot_parquet(self, out_dir: Path, tables: tuple[str, ...] = ("bars", "navs", "fx_rates")) -> list[Path]:

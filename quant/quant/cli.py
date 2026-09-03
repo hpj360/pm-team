@@ -243,13 +243,32 @@ def dq_report(
 @app.command("portfolio")
 def portfolio_show(
     positions_path: Optional[str] = typer.Option(None, help="positions.csv 路径（默认 data/）"),
+    paper: bool = typer.Option(False, "--paper", help="显示模拟盘持仓（M7）"),
 ):
     """组合视图：跨市场持仓统一 CNY 计价（含数据时点戳）。"""
+    import json as _json
+
     from .data.fx import get_usdt_cny
-    from .portfolio.io import load_positions
+    from .portfolio.io import Position
     from .portfolio.viewer import build_view, render
 
-    positions = load_positions(Path(positions_path) if positions_path else None)
+    if paper:
+        store = _open_store()
+        try:
+            row = store.latest_account("paper")
+            if row is None:
+                typer.echo("模拟盘无账户快照，先运行 quant trade paper")
+                raise typer.Exit(1)
+            positions = [
+                Position(market=iid.split(":", 1)[0], symbol=iid.split(":", 1)[1],
+                         quantity=float(p["qty"]), avg_cost=float(p["avg_cost"]))
+                for iid, p in _json.loads(row[2]).items() if p.get("qty")
+            ]
+            typer.echo(f"[模拟盘] 现金 {row[1]:,.2f} CNY，快照时点 {row[0]}")
+        finally:
+            store.close()
+    else:
+        positions = load_positions(Path(positions_path) if positions_path else None)
     if not positions:
         typer.echo("无持仓，请编辑 data/positions.csv（market,symbol,quantity,avg_cost,opened_at）")
         raise typer.Exit(1)
@@ -306,6 +325,64 @@ def backtest(
             result = bt_engine.run_backtest(clean, entries, exits).as_dict()
         typer.echo(json.dumps({"instrument": inst.id, "strategy": strategy,
                                **result}, ensure_ascii=False, default=str))
+    finally:
+        store.close()
+
+
+# ---------- trade（M7 模拟盘 / M8 币实盘） ----------
+trade_app = typer.Typer(add_completion=False, help="交易执行: 模拟盘 / 币实盘（testnet 先行）")
+app.add_typer(trade_app, name="trade")
+
+
+@trade_app.command("paper")
+def trade_paper(
+    amount: Optional[float] = typer.Option(None, help="买入金额覆盖（默认按规则目标仓位）"),
+    init_cash: float = typer.Option(100_000.0, help="账户初始现金（无快照时生效）"),
+    push: bool = typer.Option(False, "--push", help="成交结果推送"),
+):
+    """求值信号规则并在模拟盘执行（次 bar 开盘 + 滑点成交）。"""
+    from .trading import paper as paper_mod
+
+    rules = load_rules()
+    if not rules:
+        typer.echo(f"无规则，请配置 {DATA_DIR / 'signals.yaml'}")
+        raise typer.Exit(1)
+    store = _open_store()
+    try:
+        engine = SignalEngine(store, rules)
+        fired = engine.check()
+        if not fired:
+            typer.echo("无新信号，模拟盘无动作")
+            return
+        account = paper_mod.PaperAccount.load(store, init_cash=init_cash)
+        results = [paper_mod.execute(store, account, r, amount=amount) for r in fired]
+        if push:
+            notifier = Notifier()
+            for res in results:
+                notifier.send("模拟盘成交", json.dumps(res, ensure_ascii=False), level="regular")
+        typer.echo(json.dumps(results, ensure_ascii=False, default=str))
+    finally:
+        store.close()
+
+
+@trade_app.command("live-crypto")
+def trade_live_crypto(
+    symbol: str = typer.Argument(..., help="交易对，如 BTC-USDT"),
+    side: str = typer.Option("buy", help="buy / sell"),
+    amount_usdt: float = typer.Option(..., help="金额（USDT 计）"),
+    price: float = typer.Option(..., help="委托参考价（用于数量计算）"),
+    mode: str = typer.Option("dry-run", help="dry-run / testnet / live"),
+):
+    """币实盘下单（默认 dry-run 不触网；风控必过，拒绝单留审计）。"""
+    from .trading.live_crypto import LiveCryptoExecutor
+
+    store = _open_store()
+    try:
+        ex = LiveCryptoExecutor(store, mode=mode)
+        result = ex.place_order(symbol, side, amount_usdt, price)
+        typer.echo(json.dumps(result, ensure_ascii=False, default=str))
+        if result.get("status") == "rejected":
+            raise typer.Exit(1)
     finally:
         store.close()
 

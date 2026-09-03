@@ -1,0 +1,6 @@
+# 实盘风控规则（M8）。任何实盘下单必经 risk.py 检查，策略无权限绕过。
+# 门槛（plan v1.2）: 实盘首月单笔 <= 100 USDT。
+max_order_usdt: 100        # 单笔金额上限（USDT 计）
+max_daily_loss_usdt: 50    # 日亏熔断：当日已实现亏损达到即停止开新仓
+max_daily_orders: 10       # 日频次上限
+price_deviation_pct: 0.05  # 成交价 vs 参考价偏离超 5% 拒单（防插针/错价）

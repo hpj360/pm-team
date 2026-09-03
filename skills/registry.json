@@ -32,6 +32,6 @@
  "quant-analysis": {
   "source": "file://quant/skills/quant-analysis",
   "version": "1.0.0",
-  "provides": "quant-fetch,quant-analyze,quant-signals,quant-backtest,quant-portfolio,quant-dq"
+  "provides": "quant-fetch,quant-analyze,quant-signals,quant-backtest,quant-portfolio,quant-dq,quant-trade"
  }
 }

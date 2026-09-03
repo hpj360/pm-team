@@ -32,4 +32,7 @@ build-backend = "setuptools.build_meta"
 include = ["quant*"]
 
 [tool.pytest.ini_options]
-markers = ["network: 需要真实网络的契约测试（默认跳过）"]
+markers = [
+    "network: 需要真实网络的契约测试（默认跳过）",
+    "testnet: 需要交易所 testnet API Key 的闭环测试（默认跳过）",
+]

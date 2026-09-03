@@ -1,8 +1,8 @@
 ---
 name: quant-analysis
 version: 1.0.0
-description: 个人量化分析工具：A股/场外基金/加密币的行情获取、指标研析、信号告警、组合管理与策略回测
-provides: quant-fetch,quant-analyze,quant-signals,quant-backtest,quant-portfolio,quant-dq
+description: 个人量化分析工具：A股/场外基金/加密币的行情获取、指标研析、信号告警、组合管理、策略回测与模拟盘/币实盘执行
+provides: quant-fetch,quant-analyze,quant-signals,quant-backtest,quant-portfolio,quant-dq,quant-trade
 ---
 
 # Quant Analysis
@@ -54,6 +54,19 @@ quant portfolio   # 读 quant/data/positions.csv，统一 CNY 计价
 quant dq           # 新鲜度 + 完整性缺口 + 覆盖率 + 近期事件
 quant dq --cross   # 双源交叉验证最新价（腾讯行情/天天基金/OKX）
 ```
+
+### 7. 交易执行（quant-trade，M7/M8）
+```bash
+quant trade paper                       # 信号 -> 模拟盘成交（次bar开盘+滑点，账户快照落库）
+quant trade paper --amount 5000         # 指定买入金额
+quant portfolio --paper                 # 查看模拟盘持仓（统一 CNY 计价）
+quant trade live-crypto BTC-USDT --side buy --amount-usdt 80 --price 50000
+                                        # 币实盘：默认 dry-run 不触网，必过风控
+quant trade live-crypto BTC-USDT ... --mode testnet   # 需 TESTNET_API_KEY/SECRET
+quant trade live-crypto BTC-USDT ... --mode live      # 需 I_CONFIRM_LIVE_TRADING=1
+```
+风控规则（`quant/data/risk.yaml`）: 单笔 ≤100 USDT / 日亏熔断 50 / 日频次 10 / 价格偏离 >5% 拒单。
+拒绝单写 orders(status=rejected) + dq_events 审计，绝不发往交易所。
 
 ## 数据质量三防线
 
