@@ -14,7 +14,8 @@ from typing import Optional
 import pandas as pd
 import typer
 
-from .data.quality import freshness, validate_ohlc
+from .data.quality import (cross_check, detect_gaps, fetch_spot_cn, fetch_spot_crypto,
+                           fetch_spot_fund, freshness, validate_ohlc)
 from .data.sources import get_source
 from .data.store import DATA_DIR, Store
 from .data.universe import normalize
@@ -46,6 +47,7 @@ def fetch(
     symbol: str = typer.Argument(..., help="标的代码，如 600519 / 000001 / BTC-USDT"),
     market: Optional[str] = typer.Option(None, help="cn / fund / crypto（推断歧义时必填）"),
     range_str: str = typer.Option("1y", "--range", help="回看区间: " + "/".join(RANGE_DAYS)),
+    backfill: bool = typer.Option(False, "--backfill", help="检测并回补区间内缺口（M3）"),
 ):
     """拉取行情/净值并落库（增量 + 幂等）。"""
     inst = normalize(symbol, market)
@@ -55,10 +57,21 @@ def fetch(
         store.upsert_instrument(inst.id, inst.market, inst.symbol, inst.currency)
         source = get_source(inst.market)
         df = source.fetch(store, inst.id, inst.raw, start, date.today())
-        typer.echo(json.dumps({
+        result = {
             "instrument": inst.id, "rows": len(df),
             "last": str(df["ts"].iloc[-1]) if len(df) else None,
-        }, ensure_ascii=False))
+        }
+        if backfill:
+            from .data.calendar import load_calendar
+
+            try:
+                cal = load_calendar()
+                itd = lambda d: d in set(cal)  # noqa: E731
+            except Exception:
+                itd = None
+            result["backfilled"] = source.backfill(store, inst.id, inst.raw,
+                                                   date.today(), is_trading_day=itd)
+        typer.echo(json.dumps(result, ensure_ascii=False))
     finally:
         store.close()
 
@@ -153,24 +166,146 @@ def signals_cmd(
 @app.command("dq")
 def dq_report(
     symbol: Optional[str] = typer.Option(None, help="只查单个标的（如 600519）"),
-    as_json: bool = typer.Option(False, "--json"),
+    cross: bool = typer.Option(False, "--cross", help="最新价双源交叉验证（需网络）"),
 ):
-    """数据质量报告：新鲜度 + 近期 dq 事件（缺口检测 M3 补全）。"""
+    """数据质量报告：新鲜度 + 完整性缺口 + 近期 dq 事件 (+ 可选交叉验证)。"""
     store = _open_store(read_only=False)
     try:
+        from .data.calendar import load_calendar
+
+        try:
+            cal = load_calendar()
+            itd = lambda d: d in set(cal)  # noqa: E731
+        except Exception:
+            itd = None
+
         instruments = store.conn.execute("SELECT id, market, symbol FROM instruments").fetchall()
         report = []
         for iid, market, sym in instruments:
             if symbol and sym != normalize(symbol).symbol:
                 continue
-            last = store.last_nav_ts(iid) if market == "fund" else store.last_bar_ts(iid)
-            status, desc = freshness(market, last)
-            report.append({"instrument": iid, "last_data": str(last), "status": status,
-                           "freshness": desc})
+            if market == "fund":
+                df, last = store.get_navs(iid), store.last_nav_ts(iid)
+            else:
+                df, last = store.get_bars(iid), store.last_bar_ts(iid)
+            status, desc = freshness(market, last, is_trading_day=itd)
+            item = {"instrument": iid, "last_data": str(last), "status": status,
+                    "freshness": desc}
+            if not df.empty and market != "crypto":
+                gaps = detect_gaps(market, df, df["ts"].min().date(),
+                                   df["ts"].max().date(), is_trading_day=itd)
+                item["gaps"] = len(gaps)
+                item["gap_dates"] = [str(g) for g in gaps[:10]]
+                # 覆盖率: 实际行数 / 应有交易日数
+                expected = len(detect_gaps(market, df, df["ts"].min().date(),
+                                           df["ts"].max().date(), is_trading_day=itd)) + len(df)
+                item["coverage_pct"] = round(100 * len(df) / expected, 2) if expected else None
+            report.append(item)
+
+        cross_results = []
+        if cross:
+            fetchers = {"cn": fetch_spot_cn, "fund": fetch_spot_fund, "crypto": fetch_spot_crypto}
+            for iid, market, sym in instruments:
+                if symbol and sym != normalize(symbol).symbol:
+                    continue
+                if market == "fund":
+                    local = store.get_navs(iid)
+                    local_price = float(local["nav"].iloc[-1]) if not local.empty else None
+                    raw = sym.split(".")[0]
+                else:
+                    bars = store.get_bars(iid)
+                    local_price = float(bars["close"].iloc[-1]) if not bars.empty else None
+                    raw = sym
+                try:
+                    remote_price = fetchers[market](raw)
+                except Exception as exc:
+                    cross_results.append({"instrument": iid, "error": f"{type(exc).__name__}: {exc}"})
+                    continue
+                result = cross_check(local_price, remote_price)
+                result.update({"instrument": iid, "local": local_price, "remote": remote_price})
+                if result["deviated"]:
+                    store.add_dq_event("cross_check_deviation", sym,
+                                       f"本地 {local_price} vs 第二源 {remote_price}，"
+                                       f"偏差 {result['deviation']:.4f} 超容差")
+                cross_results.append(result)
+
         events = store.get_dq_events(limit=20)
-        out = {"freshness": report,
-               "recent_dq_events": events.to_dict(orient="records") if not events.empty else []}
+        out = {"freshness": report, "recent_dq_events":
+               events.to_dict(orient="records") if not events.empty else []}
+        if cross:
+            out["cross_check"] = cross_results
         typer.echo(json.dumps(out, ensure_ascii=False, default=str))
+    finally:
+        store.close()
+
+
+# ---------- portfolio ----------
+@app.command("portfolio")
+def portfolio_show(
+    positions_path: Optional[str] = typer.Option(None, help="positions.csv 路径（默认 data/）"),
+):
+    """组合视图：跨市场持仓统一 CNY 计价（含数据时点戳）。"""
+    from .data.fx import get_usdt_cny
+    from .portfolio.io import load_positions
+    from .portfolio.viewer import build_view, render
+
+    positions = load_positions(Path(positions_path) if positions_path else None)
+    if not positions:
+        typer.echo("无持仓，请编辑 data/positions.csv（market,symbol,quantity,avg_cost,opened_at）")
+        raise typer.Exit(1)
+    store = _open_store()
+    try:
+        usdt_cny, fx_desc = 1.0, ""
+        if any(p.market == "crypto" for p in positions):
+            usdt_cny, fx_desc = get_usdt_cny(store)
+        view = build_view(store, positions, usdt_cny, fx_desc)
+        typer.echo(render(view))
+    finally:
+        store.close()
+
+
+# ---------- backtest ----------
+@app.command()
+def backtest(
+    symbol: str,
+    strategy: str = typer.Option("sma_cross", help="sma_cross / momentum / dca"),
+    market: Optional[str] = None,
+    range_str: str = typer.Option("1y", "--range"),
+):
+    """向量化回测（信号次 bar 开盘成交，引擎强制无未来函数）。"""
+    from .backtest import engine as bt_engine
+    from .backtest import strategies as bt_strategies
+
+    inst = normalize(symbol, market)
+    store = _open_store()
+    try:
+        if inst.market == "fund":
+            bars = store.get_navs(inst.id)
+            if bars.empty:
+                typer.echo("无本地数据，请先 quant fetch")
+                raise typer.Exit(1)
+            bars = bars.rename(columns={"nav": "close"})
+            # 净值序列无开高低量，用净值近似，补齐字段让 validate_ohlc 通过
+            bars["open"] = bars["close"]
+            bars["high"] = bars["close"]
+            bars["low"] = bars["close"]
+            bars["volume"] = 0.0
+        else:
+            bars = store.get_bars(inst.id)
+            if bars.empty:
+                typer.echo("无本地数据，请先 quant fetch")
+                raise typer.Exit(1)
+        # 回测输入先过质量校验（脏数据不进回测）
+        clean, _ = validate_ohlc(bars)
+        if strategy == "dca":
+            result = bt_engine.run_dca(clean, **bt_strategies.DCA_DEFAULTS)
+        else:
+            if strategy not in ("sma_cross", "momentum"):
+                raise typer.BadParameter("strategy 可选 sma_cross / momentum / dca")
+            entries, exits = getattr(bt_strategies, strategy)(clean)
+            result = bt_engine.run_backtest(clean, entries, exits).as_dict()
+        typer.echo(json.dumps({"instrument": inst.id, "strategy": strategy,
+                               **result}, ensure_ascii=False, default=str))
     finally:
         store.close()
 

@@ -106,3 +106,51 @@ def detect_gaps(market: str, df: pd.DataFrame, start: date, end: date,
             missing.append(cur)
         cur += timedelta(days=1)
     return missing
+
+
+# ---------- 4. 准确性：双源交叉验证（M3） ----------
+CROSS_CHECK_TOLERANCE = 0.005  # 0.5% 容差（首月建议放宽 1% 观察，plan reservation #1）
+
+
+def cross_check(local_price: float, remote_price: float,
+                tolerance: float = CROSS_CHECK_TOLERANCE) -> dict:
+    """比对本地最新价与第二源实时价。偏差超容差 → deviated=True（写 dq_event 由调用方决定）。"""
+    if local_price is None or remote_price is None or local_price <= 0:
+        return {"deviation": None, "deviated": False, "skipped": True}
+    deviation = abs(local_price - remote_price) / local_price
+    return {"deviation": deviation, "deviated": deviation > tolerance, "skipped": False}
+
+
+def fetch_spot_cn(raw_symbol: str) -> float | None:
+    """第二源：腾讯系实时行情（akshare spot，网络操作）。"""
+    import akshare as ak  # noqa: PLC0415 延迟导入
+
+    df = ak.stock_zh_a_spot_em()
+    row = df[df["代码"] == raw_symbol]
+    return float(row["最新价"].iloc[0]) if not row.empty else None
+
+
+def fetch_spot_crypto(symbol: str, base_url: str = "https://www.okx.com") -> float | None:
+    """第二源：OKX 公开 ticker（网络操作）。"""
+    import requests
+
+    resp = requests.get(f"{base_url}/api/v5/market/ticker",
+                        params={"instId": symbol}, timeout=10)
+    resp.raise_for_status()
+    data = resp.json()["data"]
+    return float(data[0]["last"]) if data else None
+
+
+def fetch_spot_fund(raw_symbol: str) -> float | None:
+    """第二源：天天基金净值快照接口 fundgz（网络操作）。返回单位净值。"""
+    import json
+    import re
+
+    import requests
+
+    resp = requests.get(f"http://fundgz.1234567.com.cn/js/{raw_symbol}.js", timeout=10)
+    resp.raise_for_status()
+    match = re.search(r"\((\{.*\})\)", resp.text)
+    if not match:
+        return None
+    return float(json.loads(match.group(1))["dwjz"])

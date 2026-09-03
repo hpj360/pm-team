@@ -70,3 +70,45 @@ class BaseSource(ABC):
         if self.kind == "bars":
             return store.get_bars(instrument_id, start, end)
         return store.get_navs(instrument_id, start, end)
+
+    # ---------- M3: 缺口回补 ----------
+    def backfill(self, store: Store, instrument_id: str, raw_symbol: str,
+                 end: date, is_trading_day=None) -> int:
+        """检测本地数据缺口并按区间回补，返回补入行数（AC-12）。
+
+        只回补 [首根, 末根] 区间内的洞——末根之后的增量由常规 fetch 负责。
+        """
+        from ..quality import detect_gaps
+
+        df = self._read_all(store, instrument_id, None, None)
+        if df.empty:
+            return 0
+        first = df["ts"].min().date()
+        last = df["ts"].max().date()
+        gaps = detect_gaps(self.market, df, first, last, is_trading_day)
+        if not gaps:
+            return 0
+        # 缺口日期合并为连续区间
+        ranges: list[tuple[date, date]] = []
+        for d in gaps:
+            if ranges and d == ranges[-1][1] + timedelta(days=1):
+                ranges[-1] = (ranges[-1][0], d)
+            else:
+                ranges.append((d, d))
+        total = 0
+        for s, e in ranges:
+            try:
+                remote = self._fetch_remote(raw_symbol, s, e)
+            except Exception as exc:
+                logger.warning("backfill: %s %s~%s 拉取失败: %s", raw_symbol, s, e, exc)
+                store.add_dq_event("backfill_failure", raw_symbol, f"{s}~{e}: {exc}")
+                continue
+            if remote is None or remote.empty:
+                continue  # 区间本就无交易（如停牌），不算失败
+            if self.kind == "bars":
+                clean, _ = validate_ohlc(remote)
+                total += store.upsert_bars(instrument_id, clean, self._adj_type())
+            else:
+                clean, _ = validate_navs(remote)
+                total += store.upsert_navs(instrument_id, clean)
+        return total
