@@ -43,7 +43,7 @@ class CryptoSource(BaseSource):
         return df[df["ts"].dt.date <= end]
 
     def _fetch_remote(self, raw_symbol: str, start: date, end: date) -> pd.DataFrame:
-        import ccxt  # noqa: PLC0415 延迟导入
+        import ccxt  # 延迟导入
 
         chain = [os.environ.get("QUANT_CRYPTO_EXCHANGE")] if os.environ.get(
             "QUANT_CRYPTO_EXCHANGE") else self.chain
@@ -53,7 +53,7 @@ class CryptoSource(BaseSource):
                 df = self._fetch_one(ccxt, exchange_id, raw_symbol, start, end)
                 self.exchange_id = exchange_id  # 记录实际成功的所
                 return df
-            except Exception as exc:  # 单所失败继续降级
+            except Exception as exc:  # noqa: BLE001 单所失败继续降级（网络/地域封锁等多因）
                 last_exc = exc
                 continue
         if last_exc is not None:
