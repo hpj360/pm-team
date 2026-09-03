@@ -1,0 +1,35 @@
+# 信号规则样例（quant signals check 求值）
+# op 可选: < > <= >= cross_below cross_above
+# metric 可选: close / ma20 / ma60 / rsi14 / macd_hist / boll_pct_b / nav / nav_drawdown
+# direction: buy / sell / info（buy/sell 走紧急双通道推送）
+rules:
+  - id: 600519-ma60-cross_below
+    name: 茅台跌破60日线
+    symbol: 600519.SH
+    market: cn
+    metric: close
+    op: cross_below
+    threshold: 1500
+    direction: buy
+    cooldown_h: 24
+    target_position_pct: 0.2
+  - id: btc-rsi-oversold
+    name: BTC 超卖
+    symbol: BTC-USDT
+    market: crypto
+    metric: rsi14
+    op: "<"
+    threshold: 30
+    direction: buy
+    cooldown_h: 24
+    target_position_pct: 0.1
+  - id: fund-000001-drawdown
+    name: 华夏成长回撤5%
+    symbol: 000001.OF
+    market: fund
+    metric: nav_drawdown
+    op: "<"
+    threshold: -0.05
+    direction: buy
+    cooldown_h: 48
+    target_position_pct: 0.3

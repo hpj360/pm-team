@@ -1,0 +1,35 @@
+[project]
+name = "quant"
+version = "0.1.0"
+description = "个人量化分析工具：A股/场外基金/加密币 数据+信号+建议单推送"
+requires-python = ">=3.10"
+dependencies = [
+    "pandas>=2.0",
+    "duckdb>=1.0",
+    "typer>=0.12",
+    "pyyaml>=6.0",
+    "requests>=2.31",
+]
+
+[project.optional-dependencies]
+# 数据源与回测/UI 为重依赖，按需安装：pip install -e .[full]
+full = [
+    "akshare>=1.14",
+    "ccxt>=4.0",
+    "vectorbt>=0.26",
+    "streamlit>=1.36",
+]
+dev = ["pytest>=8.0", "ruff>=0.5"]
+
+[project.scripts]
+quant = "quant.cli:app"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+include = ["quant*"]
+
+[tool.pytest.ini_options]
+markers = ["network: 需要真实网络的契约测试（默认跳过）"]

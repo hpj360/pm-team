@@ -1,0 +1,12 @@
+# quant 调度样例（crontab -e 按需启用）
+# 数据拉取: A股/基金 交易日 17:00 后；crypto 7x24 每小时
+0 17 * * 1-5  cd /path/to/quant && quant fetch 600519 --market cn --range 1y
+30 17 * * 1-5 cd /path/to/quant && quant fetch 000001 --market fund --range 1y
+0 * * * *     cd /path/to/quant && quant fetch BTC-USDT --market crypto --range 90d
+
+# 信号检查: fetch 之后跑（产出建议单并推送）
+30 17 * * 1-5 cd /path/to/quant && quant signals --push
+30 * * * *    cd /path/to/quant && quant signals --push
+
+# 数据质量例行报告: 每周日晚
+0 20 * * 0    cd /path/to/quant && quant dq

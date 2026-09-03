@@ -1,0 +1,20 @@
+# 推送通道配置（quant signals --push 使用）
+# type: feishu_webhook / wecom_webhook / pushplus
+# tier: regular=常规消息也发 / urgent=仅紧急信号发（保护 pushplus 免费额度）
+channels:
+  - name: feishu
+    type: feishu_webhook
+    webhook: https://open.feishu.cn/open-apis/bot/v2/hook/REPLACE_ME
+    secret: ""            # 可选，机器人签名密钥
+    enabled: false
+    tier: regular
+  - name: wecom
+    type: wecom_webhook
+    webhook: https://qyapi.weixin.qq.com/cgi-bin/webhook/send?key=REPLACE_ME
+    enabled: false
+    tier: regular
+  - name: wechat-pushplus
+    type: pushplus
+    token: REPLACE_ME
+    enabled: false
+    tier: urgent   # 仅紧急信号走 pushplus（免费额度日 200 条）
