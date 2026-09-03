@@ -23,16 +23,24 @@
 | "工具" | 既要日常轻量使用（盯盘/研析/告警），也要低频深度使用（回测/归因/交易） | 使用频率双峰 → CLI + Web 双入口 |
 | 隐含需求 | 与已有 agent 生态协同：能被 Hermes Workbench 调度、能作为 skill 被 agent 调用 | 用户刚完成 Hermes 能力融合，生态意图明显 |
 
-### 核心需求（按优先级）
+### 核心需求（按优先级，v1.2 按裁决 #5/#6 重排）
 
-- **R1 数据层**：A股/基金/币行情与净值获取、缓存与本地存储（最高优先——一切的地基）
-- **R2 研析**：技术指标（MA/RSI/MACD/BOLL）、基金持仓/费率/经理、币种资金费率
+- **R1 数据层**：A股/基金/币行情与净值获取、缓存与本地存储（一切的地基）
+- **R8 数据质量（v1.2 新增，与 R1 同级）**：
+  - **完整性**：交易日历比对缺口检测、缺口回补、覆盖率报表；基金 T+1 净值语义正确处理
+  - **时效性**：分市场新鲜度阈值（cn >1 交易日 / fund >1 自然日 / crypto >2h 判 STALE）；
+    所有输出（研析报告/建议单/组合视图）强制携带数据时点戳，陈旧数据显著标注
+  - **准确性**：OHLC 合法性校验（low≤open/close≤high、vol≥0、非空）；最新收盘价与
+    第二源实时报价交叉验证（容差 0.5%）；复权口径固定前复权（qfq）并在 schema 元数据声明
+- **R2 信号与推送（v1.2 前置为最高交付优先级）**：指标计算（MA/RSI/MACD/BOLL）→
+  信号引擎（规则/阈值触发，含防打扰 cooldown）→ 飞书+微信双通道推送 → **A股/基金操作建议单**
+  （代码/方向/参考数量/信号依据/数据时点，人工确认执行）
 - **R3 组合管理**：跨市场持仓统一视图、成本、盈亏、汇率折算
 - **R4 策略回测**：向量化回测 + 三资产策略样例 + 绩效报告
-- **R5 监控告警**：价格/指标/净值阈值提醒，推送至**飞书 + 微信**（已确认双通道）
+- **R5 研析报告**：单标的深度研析（趋势/超买超卖/波动分位），币种复用 stock-analysis skill
 - **R6 交付形态**：CLI 优先，Web UI（Streamlit）次之，agent skill 化接口收尾
-- **R7 交易执行（已确认需要，分阶段）**：M6 模拟盘（虚拟账户+信号引擎）→ M7 币实盘
-  （ccxt 官方 API + 风控熔断）→ M8 A股实盘（爬虫方案，高风险可选，视模拟盘稳定性决定）
+- **R7 交易执行（分阶段，后置）**：M7 模拟盘（虚拟账户）→ M8 币实盘（ccxt + 风控熔断）→
+  M9 A股自动下单（爬虫方案，高风险可选，视模拟盘稳定性决定；首期只做建议单人工执行）
 
 ## In scope
 
@@ -66,6 +74,8 @@
 | 2 | 美股是否必需？ | **不需要** | 砍掉 yfinance 数据源；美股研析由 stock-analysis skill 兜底 |
 | 3 | 通知渠道？ | **飞书 + 微信** | notify.py 实现 feishu_webhook / wecom_webhook / pushplus 三通道，可配置多通道并发 |
 | 4 | 数据源付费？ | **只用免费渠道/爬虫** | akshare（本身即爬虫聚合）+ 天天基金 + ccxt 公开行情；多源冗余 + 本地缓存缓解免费源风险 |
+| 5 | 交付优先级（2026-09-03 第二轮裁决） | **信号 + 操作建议推送优先** | 信号引擎与建议单推送从 M6/M8 前置到 M2（数据地基与指标之后立即交付）；模拟盘/实盘后移不变 |
+| 6 | 数据质量要求（2026-09-03 第二轮裁决） | **必须系统性保障完整性/时效性/准确性** | 新增 R8 数据质量需求与 M3 数据质量硬化里程碑：缺口检测与回补、新鲜度监控与数据时点戳、OHLC 合法性校验与多源交叉验证 |
 
 ## Assumptions（仍有效的显式假设）
 
@@ -82,15 +92,21 @@
 quant/
 ├── pyproject.toml
 ├── quant/                    # Python 包
-│   ├── data/                 # R1: 数据接入层
+│   ├── data/                 # R1+R8: 数据接入与质量层
 │   │   ├── sources/          #   akshare_cn / akshare_fund / ccxt_crypto（美股源已裁撤）
-│   │   ├── store.py          #   DuckDB + Parquet 读写，统一 OHLCV/NAV schema
+│   │   ├── store.py          #   DuckDB + Parquet 读写，统一 OHLCV/NAV schema（复权口径元数据）
+│   │   ├── quality.py        #   完整性缺口检测/新鲜度/OHLC 合法性/交叉验证 + dq report
+│   │   ├── calendar.py       #   交易日历（akshare tool_trade_date_hist 本地缓存）
 │   │   └── universe.py       #   标的主数据（600519.SH / 000001.OF / BTC-USDT）
-│   ├── research/             # R2: 指标与研析
+│   ├── research/             # R5: 指标与研析（指标纯函数，供信号引擎复用）
+│   ├── signals/              # R2: 信号引擎（前置交付）
+│   │   ├── engine.py         #   规则/阈值 → Signal（point-in-time + cooldown 防打扰）
+│   │   └── advice.py         #   操作建议单生成（A股/基金，人工确认执行）
+│   ├── alerts/               # R2: 推送层
+│   │   └── notify.py         #   feishu/wecom/pushplus 多通道
 │   ├── portfolio/            # R3: 持仓与组合
 │   ├── backtest/             # R4: vectorbt 封装 + 策略样例
-│   ├── alerts/               # R5: 阈值规则 + 调度 + 飞书/微信推送
-│   ├── trading/              # R7: 交易执行（M6+）
+│   ├── trading/              # R7: 交易执行（后置里程碑）
 │   │   ├── paper.py          #   模拟盘：虚拟账户 + 模拟成交
 │   │   ├── live_crypto.py    #   币实盘：ccxt private API（testnet 先行）
 │   │   └── risk.py           #   风控熔断：单笔上限/日亏上限/异常停机
@@ -129,6 +145,10 @@ quant/
 - AC-8 单元测试覆盖 data/store 与 research 指标计算，`pytest` 全绿；回测结果有快照测试
 - AC-9 `quant trade paper`：信号触发后虚拟账户按次笔成交记录（含滑点假设），`portfolio show --paper` 与虚拟账户明细一致
 - AC-10 币实盘在 exchange testnet 下完成一次市价单闭环（下单→成交→查询→风控限额拦截第二笔超限单）
+- AC-11 信号触发后生成操作建议单（代码/方向/参考数量/信号依据/数据时点戳）并经飞书+微信双通道推送；同标的同向信号在 cooldown 窗口（默认 24h）内不重复推送
+- AC-12 完整性：人为删除某标的 3 根 bar 后 `quant dq report --symbol` 精确报告 3 个缺口，`quant fetch --backfill` 补齐后缺口归零
+- AC-13 时效性：数据陈旧超过分市场阈值（cn >1 交易日 / fund >1 自然日 / crypto >2h）时，`analyze` / `portfolio show` / 建议单输出显著 STALE 标注并附数据时点戳
+- AC-14 准确性：注入非法 OHLC 行（high < low）被 dq 校验捕获并从查询结果隔离；最新收盘价与第二源实时报价偏差 > 0.5% 时产生 data-quality 告警事件
 
 ## Core entities (ontology)
 
