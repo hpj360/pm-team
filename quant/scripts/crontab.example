@@ -3,10 +3,15 @@
 0 17 * * 1-5  cd /path/to/quant && quant fetch 600519 --market cn --range 1y
 30 17 * * 1-5 cd /path/to/quant && quant fetch 000001 --market fund --range 1y
 0 * * * *     cd /path/to/quant && quant fetch BTC-USDT --market crypto --range 90d
+# crypto 源如被网络封锁，可指定交易所: QUANT_CRYPTO_EXCHANGE=gateio quant fetch ...
 
 # 信号检查: fetch 之后跑（产出建议单并推送）
 30 17 * * 1-5 cd /path/to/quant && quant signals --push
 30 * * * *    cd /path/to/quant && quant signals --push
+
+# 模拟盘（M7）: 跟在 signals 之后，积累 4 周稳定期记录（实盘门槛计时）
+35 17 * * 1-5 cd /path/to/quant && quant trade paper
+35 * * * *    cd /path/to/quant && quant trade paper
 
 # 数据质量例行报告: 每周日晚
 0 20 * * 0    cd /path/to/quant && quant dq
