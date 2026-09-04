@@ -57,5 +57,9 @@ class CryptoSource(BaseSource):
                 last_exc = exc
                 continue
         if last_exc is not None:
-            raise last_exc
+            raise RuntimeError(
+                f"全部交易所尝试失败（{', '.join(chain)}）: {last_exc}。"
+                f"多为地域/网络封锁，可设 QUANT_CRYPTO_EXCHANGE=<id> 指定其他交易所"
+                f"（如 gate / bybit / htx），或配置代理。"
+            ) from last_exc
         return EMPTY

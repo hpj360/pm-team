@@ -13,10 +13,31 @@ from datetime import date, timedelta
 
 import pandas as pd
 
-from ..quality import validate_ohlc, validate_navs
+from ..quality import validate_navs, validate_ohlc
 from ..store import Store
 
 logger = logging.getLogger("quant.sources")
+
+# 可选依赖缺失时的安装提示（试用发现: 静默降级让用户以为没数据）
+_OPTIONAL_DEP_HINT = {
+    "akshare": "akshare 未安装——A股/基金数据源不可用，请运行: pip install -e '.[full]'",
+    "ccxt": "ccxt 未安装——加密币数据源不可用，请运行: pip install -e '.[full]'",
+}
+
+
+def _dep_hint(exc: Exception) -> str:
+    """ModuleNotFoundError 且属于可选依赖时，返回安装提示（否则空串）。"""
+    if isinstance(exc, ModuleNotFoundError):
+        mod = str(exc).removeprefix("No module named '").removesuffix("'")
+        return _OPTIONAL_DEP_HINT.get(mod.split(".")[0], "")
+    return ""
+
+
+def _stderr_hint(msg: str) -> None:
+    """提示打到 stderr（不污染 stdout 的 JSON 输出）。"""
+    import sys
+
+    print(f"提示: {msg}", file=sys.stderr)
 
 
 class BaseSource(ABC):
@@ -40,8 +61,13 @@ class BaseSource(ABC):
         try:
             df = self._fetch_remote(raw_symbol, fetch_from, end)
         except Exception as exc:  # 源失败：降级到缓存（AC-7）
-            logger.warning("source-degraded: %s 拉取 %s 失败: %s", self.market, raw_symbol, exc)
-            store.add_dq_event("source_failure", raw_symbol, f"{type(exc).__name__}: {exc}")
+            hint = _dep_hint(exc)
+            logger.warning("source-degraded: %s 拉取 %s 失败: %s %s",
+                           self.market, raw_symbol, exc, hint)
+            store.add_dq_event("source_failure", raw_symbol,
+                               f"{type(exc).__name__}: {exc}" + (f" | {hint}" if hint else ""))
+            if hint:
+                _stderr_hint(hint)
             return self._read_all(store, instrument_id, start, end)
 
         if df is not None and not df.empty:

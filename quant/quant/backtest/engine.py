@@ -99,6 +99,30 @@ def run_backtest(bars: pd.DataFrame, entries: pd.Series, exits: pd.Series,
                           float(sharpe), trades, equity)
 
 
+def buy_and_hold(bars: pd.DataFrame, init_cash: float = 100_000.0,
+                 fee: float = 0.0005) -> BacktestResult:
+    """买入持有基线（P1）: 首根开盘全仓买入持有到末根，供策略对比。
+
+    与 run_backtest 同语义（次 bar 开盘成交、双边 fee 只在买入侧收一次）。
+    """
+    if bars.empty or len(bars) < 2:
+        raise ValueError("bars 至少 2 根")
+    df = bars.reset_index(drop=True)
+    cash = init_cash * (1 - fee)
+    units = cash / float(df["open"].iloc[0])
+    equity = units * df["close"]
+    equity.index = df["ts"]
+
+    returns = equity.pct_change().dropna()
+    n = len(df)
+    total_return = equity.iloc[-1] / init_cash - 1
+    annualized = (1 + total_return) ** (252 / max(n, 1)) - 1
+    max_dd = ((equity / equity.cummax()) - 1).min()
+    sharpe = (returns.mean() / returns.std() * (252 ** 0.5)) if returns.std() > 0 else 0.0
+    return BacktestResult(float(total_return), float(annualized), float(max_dd),
+                          float(sharpe), 1, equity)
+
+
 def run_dca(bars: pd.DataFrame, amount_per_period: float = 1000.0,
             period: str = "M", fee: float = 0.0) -> dict:
     """定投回测（基金场景）: 份额累计法——权益 = 累计份额 × 最新净值。

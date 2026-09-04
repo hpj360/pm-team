@@ -9,20 +9,26 @@ import json
 import logging
 from datetime import date, timedelta
 from pathlib import Path
-from typing import Optional
 
 import pandas as pd
 import typer
 
-from .data.quality import (cross_check, detect_gaps, fetch_spot_cn, fetch_spot_crypto,
-                           fetch_spot_fund, freshness, validate_ohlc)
+from .alerts.notify import Notifier
+from .data.quality import (
+    cross_check,
+    detect_gaps,
+    fetch_spot_cn,
+    fetch_spot_crypto,
+    fetch_spot_fund,
+    freshness,
+    validate_ohlc,
+)
 from .data.sources import get_source
 from .data.store import DATA_DIR, Store
 from .data.universe import normalize
 from .research.indicators import compute_all
 from .signals.advice import build_advice, push_advices, render
 from .signals.engine import SignalEngine, load_rules
-from .alerts.notify import Notifier
 
 app = typer.Typer(add_completion=False, help="个人量化分析工具：A股/场外基金/加密币")
 logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
@@ -45,7 +51,7 @@ def _open_store(read_only: bool = False) -> Store:
 @app.command()
 def fetch(
     symbol: str = typer.Argument(..., help="标的代码，如 600519 / 000001 / BTC-USDT"),
-    market: Optional[str] = typer.Option(None, help="cn / fund / crypto（推断歧义时必填）"),
+    market: str | None = typer.Option(None, help="cn / fund / crypto（推断歧义时必填）"),
     range_str: str = typer.Option("1y", "--range", help="回看区间: " + "/".join(RANGE_DAYS)),
     backfill: bool = typer.Option(False, "--backfill", help="检测并回补区间内缺口（M3）"),
 ):
@@ -66,7 +72,7 @@ def fetch(
 
             try:
                 cal = load_calendar()
-                itd = lambda d: d in set(cal)  # noqa: E731
+                itd = lambda d: d in set(cal)
             except Exception:
                 itd = None
             result["backfilled"] = source.backfill(store, inst.id, inst.raw,
@@ -80,7 +86,7 @@ def fetch(
 @app.command()
 def analyze(
     symbol: str,
-    market: Optional[str] = None,
+    market: str | None = None,
 ):
     """单标的研析：指标概览 + 数据时点戳（陈旧数据显著标注）。"""
     inst = normalize(symbol, market)
@@ -165,7 +171,7 @@ def signals_cmd(
 # ---------- dq ----------
 @app.command("dq")
 def dq_report(
-    symbol: Optional[str] = typer.Option(None, help="只查单个标的（如 600519）"),
+    symbol: str | None = typer.Option(None, help="只查单个标的（如 600519）"),
     cross: bool = typer.Option(False, "--cross", help="最新价双源交叉验证（需网络）"),
 ):
     """数据质量报告：新鲜度 + 完整性缺口 + 近期 dq 事件 (+ 可选交叉验证)。"""
@@ -175,7 +181,7 @@ def dq_report(
 
         try:
             cal = load_calendar()
-            itd = lambda d: d in set(cal)  # noqa: E731
+            itd = lambda d: d in set(cal)
         except Exception:
             itd = None
 
@@ -242,14 +248,14 @@ def dq_report(
 # ---------- portfolio ----------
 @app.command("portfolio")
 def portfolio_show(
-    positions_path: Optional[str] = typer.Option(None, help="positions.csv 路径（默认 data/）"),
+    positions_path: str | None = typer.Option(None, help="positions.csv 路径（默认 data/）"),
     paper: bool = typer.Option(False, "--paper", help="显示模拟盘持仓（M7）"),
 ):
     """组合视图：跨市场持仓统一 CNY 计价（含数据时点戳）。"""
     import json as _json
 
     from .data.fx import get_usdt_cny
-    from .portfolio.io import Position
+    from .portfolio.io import Position, load_positions
     from .portfolio.viewer import build_view, render
 
     if paper:
@@ -288,7 +294,7 @@ def portfolio_show(
 def backtest(
     symbol: str,
     strategy: str = typer.Option("sma_cross", help="sma_cross / momentum / dca"),
-    market: Optional[str] = None,
+    market: str | None = None,
     range_str: str = typer.Option("1y", "--range"),
 ):
     """向量化回测（信号次 bar 开盘成交，引擎强制无未来函数）。"""
@@ -316,6 +322,8 @@ def backtest(
                 raise typer.Exit(1)
         # 回测输入先过质量校验（脏数据不进回测）
         clean, _ = validate_ohlc(bars)
+        # 买入持有基线: 所有策略统一对比（策略跑不赢基线就没有存在价值）
+        baseline = bt_engine.buy_and_hold(clean).as_dict()
         if strategy == "dca":
             result = bt_engine.run_dca(clean, **bt_strategies.DCA_DEFAULTS)
         else:
@@ -324,7 +332,29 @@ def backtest(
             entries, exits = getattr(bt_strategies, strategy)(clean)
             result = bt_engine.run_backtest(clean, entries, exits).as_dict()
         typer.echo(json.dumps({"instrument": inst.id, "strategy": strategy,
+                               "baseline_buy_hold": baseline,
                                **result}, ensure_ascii=False, default=str))
+    finally:
+        store.close()
+
+
+# ---------- report（P1 模拟盘周报） ----------
+@app.command("report")
+def report_cmd(
+    init_cash: float = typer.Option(100_000.0, help="期初权益（与 trade paper --init-cash 一致）"),
+    push: bool = typer.Option(False, "--push", help="推送到通知渠道"),
+):
+    """模拟盘绩效报告（M9 实盘门槛的验收材料）。"""
+    from .report import build_paper_report
+
+    store = _open_store()
+    try:
+        rep = build_paper_report(store, init_cash=init_cash)
+        typer.echo(rep.render())
+        typer.echo(json.dumps(rep.as_dict(), ensure_ascii=False, default=str))
+        if push:
+            notifier = Notifier()
+            notifier.send("模拟盘周报", rep.render(), level="regular")
     finally:
         store.close()
 
@@ -336,7 +366,7 @@ app.add_typer(trade_app, name="trade")
 
 @trade_app.command("paper")
 def trade_paper(
-    amount: Optional[float] = typer.Option(None, help="买入金额覆盖（默认按规则目标仓位）"),
+    amount: float | None = typer.Option(None, help="买入金额覆盖（默认按规则目标仓位）"),
     init_cash: float = typer.Option(100_000.0, help="账户初始现金（无快照时生效）"),
     push: bool = typer.Option(False, "--push", help="成交结果推送"),
 ):
