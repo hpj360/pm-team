@@ -2,7 +2,7 @@
 name: quant-analysis
 version: 1.0.0
 description: 个人量化分析工具：A股/场外基金/加密币的行情获取、指标研析、信号告警、组合管理、策略回测与模拟盘/币实盘执行
-provides: quant-fetch,quant-analyze,quant-signals,quant-backtest,quant-portfolio,quant-dq,quant-trade
+provides: quant-fetch,quant-analyze,quant-signals,quant-backtest,quant-portfolio,quant-dq,quant-trade,quant-report
 ---
 
 # Quant Analysis
@@ -67,6 +67,12 @@ quant trade live-crypto BTC-USDT ... --mode live      # 需 I_CONFIRM_LIVE_TRADI
 ```
 风控规则（`quant/data/risk.yaml`）: 单笔 ≤100 USDT / 日亏熔断 50 / 日频次 10 / 价格偏离 >5% 拒单。
 拒绝单写 orders(status=rejected) + dq_events 审计，绝不发往交易所。
+
+### 8. 模拟盘周报（quant-report，P1）
+```bash
+quant report [--init-cash 100000] [--push]   # 权益曲线/累计收益/最大回撤/成交统计/持仓明细
+```
+纯本地库计算（orders + accounts 快照），M9 实盘门槛（4 周稳定期）的验收材料。
 
 ## 数据质量三防线
 
