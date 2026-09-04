@@ -14,7 +14,7 @@ class FundSource(BaseSource):
     kind = "navs"
 
     def _fetch_remote(self, raw_symbol: str, start: date, end: date) -> pd.DataFrame:
-        import akshare as ak  # noqa: PLC0415 延迟导入
+        import akshare as ak
 
         df = ak.fund_open_fund_info_em(symbol=raw_symbol, indicator="单位净值走势")
         if df is None or df.empty:

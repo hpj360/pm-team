@@ -123,7 +123,7 @@ def cross_check(local_price: float, remote_price: float,
 
 def fetch_spot_cn(raw_symbol: str) -> float | None:
     """第二源：腾讯系实时行情（akshare spot，网络操作）。"""
-    import akshare as ak  # noqa: PLC0415 延迟导入
+    import akshare as ak
 
     df = ak.stock_zh_a_spot_em()
     row = df[df["代码"] == raw_symbol]

@@ -1,9 +1,8 @@
 """advice: 建议单内容契约（AC-11）+ STALE 标注（AC-13）+ 持仓参考。"""
 
-from datetime import datetime, timedelta
+from datetime import datetime
 
 import pandas as pd
-
 from conftest import make_bars
 
 from quant.signals import advice as advice_mod
@@ -12,8 +11,8 @@ from quant.signals.engine import SignalEngine, SignalRule
 
 
 def _rule(**kw):
-    defaults = dict(id="r1", symbol="600519.SH", market="cn", metric="close",
-                    op="<", threshold=11.0, direction="buy", target_position_pct=0.2)
+    defaults = {"id": "r1", "symbol": "600519.SH", "market": "cn", "metric": "close",
+                "op": "<", "threshold": 11.0, "direction": "buy", "target_position_pct": 0.2}
     defaults.update(kw)
     return SignalRule(**defaults)
 

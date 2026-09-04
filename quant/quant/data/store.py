@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import os
 from pathlib import Path
-from typing import Optional
 
 import duckdb
 import pandas as pd
@@ -52,7 +51,7 @@ NAV_COLS = ["ts", "nav", "acc_nav"]
 
 
 class Store:
-    def __init__(self, path: Optional[Path] = None, read_only: bool = False):
+    def __init__(self, path: Path | None = None, read_only: bool = False):
         self.path = Path(path) if path else DEFAULT_DB_PATH
         if not read_only:
             self.path.parent.mkdir(parents=True, exist_ok=True)
@@ -67,7 +66,7 @@ class Store:
         self.conn.close()
 
     @staticmethod
-    def open_readonly(path: Optional[Path] = None) -> "Store":
+    def open_readonly(path: Path | None = None) -> Store:
         return Store(path, read_only=True)
 
     # ---------- 标的 ----------

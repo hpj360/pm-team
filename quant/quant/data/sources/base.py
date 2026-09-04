@@ -60,7 +60,7 @@ class BaseSource(ABC):
 
         try:
             df = self._fetch_remote(raw_symbol, fetch_from, end)
-        except Exception as exc:  # 源失败：降级到缓存（AC-7）
+        except Exception as exc:  # noqa: BLE001 源失败：降级到缓存（AC-7，网络/依赖/限流等多因）
             hint = _dep_hint(exc)
             logger.warning("source-degraded: %s 拉取 %s 失败: %s %s",
                            self.market, raw_symbol, exc, hint)
@@ -125,7 +125,7 @@ class BaseSource(ABC):
         for s, e in ranges:
             try:
                 remote = self._fetch_remote(raw_symbol, s, e)
-            except Exception as exc:
+            except Exception as exc:  # noqa: BLE001 单区间回补失败记录后继续下一区间
                 logger.warning("backfill: %s %s~%s 拉取失败: %s", raw_symbol, s, e, exc)
                 store.add_dq_event("backfill_failure", raw_symbol, f"{s}~{e}: {exc}")
                 continue

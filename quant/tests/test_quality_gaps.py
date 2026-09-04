@@ -29,7 +29,7 @@ def _seed_with_holes(store):
 
 
 def test_gap_detection_reports_exactly_three(store):
-    df = _seed_with_holes(store)
+    _seed_with_holes(store)
     from quant.data.quality import detect_gaps
 
     bars = store.get_bars("cn:600519.SH")

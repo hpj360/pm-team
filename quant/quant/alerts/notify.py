@@ -11,10 +11,10 @@ from __future__ import annotations
 import base64
 import hashlib
 import hmac
-import json
 import logging
 import time
 from pathlib import Path
+from typing import ClassVar
 
 import requests
 
@@ -71,8 +71,9 @@ class Notifier:
         resp.raise_for_status()
         return resp.json()
 
-    _SENDERS = {"feishu_webhook": _send_feishu, "wecom_webhook": _send_wecom,
-                "pushplus": _send_pushplus}
+    _SENDERS: ClassVar[dict] = {"feishu_webhook": _send_feishu,
+                                "wecom_webhook": _send_wecom,
+                                "pushplus": _send_pushplus}
 
     # ---------- 对外接口 ----------
     def send(self, title: str, content: str, level: str = "regular") -> dict[str, bool]:
@@ -94,7 +95,7 @@ class Notifier:
                     if ok:
                         break
                     logger.warning("通道 %s 返回失败: %s", ch.get("name"), resp)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 单通道任何失败（网络/配置/响应格式）都不得影响其他通道
                     logger.warning("通道 %s 第 %d 次发送异常: %s", ch.get("name"), attempt + 1, exc)
             results[ch.get("name", ch["type"])] = ok
         return results

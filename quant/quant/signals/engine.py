@@ -33,6 +33,8 @@ class SignalRule:
     direction: str = "info"  # buy / sell / info
     cooldown_h: int = 24
     target_position_pct: float = 0.2  # 建议单目标仓位比例（保守默认 20%）
+    sizing: str = "fixed"  # fixed: 按 target_position_pct / vol_target: 波动率目标
+    target_vol: float = 0.15  # vol_target 年化目标波动率（权重 = target_vol/实现波动，截到 [0,1]）
     name: str = ""
 
     def __post_init__(self) -> None:

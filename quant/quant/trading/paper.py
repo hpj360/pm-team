@@ -55,6 +55,31 @@ def _fill_price(store: Store, market: str, iid: str, signal_ts: datetime) -> tup
     return float(bars["close"].iloc[-1]), "无次bar，按最新收盘"
 
 
+def _realized_vol(store: Store, market: str, iid: str, window: int = 20) -> float | None:
+    """近 window 根 bar 的年化实现波动率（无数据返回 None）。"""
+    df = store.get_navs(iid) if market == "fund" else store.get_bars(iid)
+    if df is None or len(df) < window + 1:
+        return None
+    price = df["nav"] if market == "fund" else df["close"]
+    ret = price.pct_change().dropna().iloc[-window:]
+    return float(ret.std() * (252 ** 0.5))
+
+
+def default_amount(store: Store, account: PaperAccount, record: SignalRecord,
+                   ref_equity: float = 100_000.0) -> float:
+    """买入金额: fixed → target_position_pct × ref_equity；
+    vol_target → clip(target_vol/实现波动, 0, 1) × ref_equity（波动率目标仓位）。"""
+    rule = record.rule
+    if rule.sizing != "vol_target":
+        return round(rule.target_position_pct * ref_equity, 2)
+    iid = f"{rule.market}:{rule.symbol}"
+    vol = _realized_vol(store, rule.market, iid)
+    if vol is None or vol <= 0:
+        return round(rule.target_position_pct * ref_equity, 2)  # 数据不足回退 fixed
+    weight = min(max(rule.target_vol / vol, 0.0), 1.0)
+    return round(weight * ref_equity, 2)
+
+
 def execute(store: Store, account: PaperAccount, record: SignalRecord,
             amount: float | None = None) -> dict:
     """按信号执行虚拟成交，写 orders + 账户快照，返回成交结果 dict。"""
@@ -65,8 +90,8 @@ def execute(store: Store, account: PaperAccount, record: SignalRecord,
     pos = account.positions.get(iid, {"qty": 0.0, "avg_cost": 0.0})
 
     if rule.direction == "buy":
-        # 默认金额: target_position_pct(默认0.2) × 100_000 初始资金参考
-        amount = amount if amount is not None else round(rule.target_position_pct * 100_000, 2)
+        # 默认金额: fixed → target_position_pct × 100k；vol_target → 波动率目标权重 × 100k
+        amount = amount if amount is not None else default_amount(store, account, record)
         fill = price * (1 + slip)
         qty = amount / fill
         if amount > account.cash:

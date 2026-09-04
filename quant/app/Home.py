@@ -11,7 +11,7 @@ st.title("量化分析 · 组合总览与数据质量")
 
 try:
     store = Store.open_readonly()
-except Exception:
+except Exception:  # noqa: BLE001 duckdb 锁/权限等任何不可用原因都降级为友好提示
     st.error("数据库不可用（可能正被写入进程占用），请稍后重试")
     st.stop()
 

@@ -17,7 +17,7 @@ class CnStockSource(BaseSource):
     kind = "bars"
 
     def _fetch_remote(self, raw_symbol: str, start: date, end: date) -> pd.DataFrame:
-        import akshare as ak  # noqa: PLC0415 延迟导入
+        import akshare as ak
 
         df = ak.stock_zh_a_hist(
             symbol=raw_symbol, period="daily",

@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 from datetime import date, timedelta
-from pathlib import Path
 
 from .store import DATA_DIR
 
@@ -17,7 +16,7 @@ CALENDAR_CACHE = DATA_DIR / "trade_calendar.json"
 
 def _fetch_remote_calendar() -> list[str]:
     """从 akshare 拉取交易日历（延迟导入，网络操作）。"""
-    import akshare as ak  # noqa: PLC0415 延迟导入
+    import akshare as ak
 
     df = ak.tool_trade_date_hist_sina()
     return [str(d) for d in df["trade_date"].astype(str)]
@@ -47,7 +46,7 @@ def is_trading_day(d: date, calendar: list[date] | None = None) -> bool:
     if calendar is None:
         try:
             calendar = load_calendar()
-        except Exception:
+        except Exception:  # noqa: BLE001 无日历时退化为工作日近似（置信度较低）
             return d.weekday() < 5
     return d in set(calendar)
 
@@ -57,7 +56,7 @@ def expected_trading_days(start: date, end: date, calendar: list[date] | None = 
     if calendar is None:
         try:
             calendar = load_calendar()
-        except Exception:
+        except Exception:  # noqa: BLE001 无日历时退化为工作日近似（置信度较低）
             # 近似：工作日（含法定节假日误差，detect_gaps 会标注置信度）
             days, cur = [], start
             while cur <= end:

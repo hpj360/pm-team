@@ -2,8 +2,6 @@
 
 from datetime import date
 
-import pandas as pd
-
 from conftest import make_bars
 
 from quant.data.sources.base import BaseSource

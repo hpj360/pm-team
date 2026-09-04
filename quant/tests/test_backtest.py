@@ -2,7 +2,6 @@
 
 import pandas as pd
 import pytest
-
 from conftest import make_bars
 
 from quant.backtest.engine import run_backtest, run_dca

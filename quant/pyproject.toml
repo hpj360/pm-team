@@ -31,6 +31,12 @@ build-backend = "setuptools.build_meta"
 [tool.setuptools.packages.find]
 include = ["quant*"]
 
+[tool.ruff.lint]
+# 项目统一使用 naive 本地时间：数据源（akshare/ccxt/天天基金）返回的 bar 时点均为
+# naive 时间戳，DuckDB 落库与信号 point-in-time 比较也基于 naive 语义，
+# 强制 tz-aware 会破坏整条比较链，故关闭 DTZ 系列规则。
+ignore = ["DTZ001", "DTZ005", "DTZ006", "DTZ011"]
+
 [tool.pytest.ini_options]
 markers = [
     "network: 需要真实网络的契约测试（默认跳过）",

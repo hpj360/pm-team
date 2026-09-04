@@ -45,7 +45,7 @@ def get_usdt_cny(store: Store) -> tuple[float, str]:
             store.upsert_fx("USDT/CNY", rate, source_name)
             approx = "（USD 近似）" if "~" in source_name else ""
             return float(rate), f"{pd.Timestamp.now().normalize().date()} ({source_name}){approx}"
-        except Exception as exc:
+        except Exception as exc:  # noqa: BLE001 汇率源失败继续降级下一源/陈旧缓存
             logger.warning("fx 源 %s 失败: %s", source_name, exc)
     if cached:
         ts, rate, source = cached

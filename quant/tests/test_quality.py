@@ -1,12 +1,11 @@
 """quality: OHLC 合法性（AC-14 部分）+ 新鲜度（AC-13）+ 缺口检测（AC-12 前置）。"""
 
-from datetime import date, datetime, timedelta
+from datetime import date, datetime
 
 import pandas as pd
-
 from conftest import make_bars
 
-from quant.data.quality import detect_gaps, freshness, validate_ohlc, validate_navs
+from quant.data.quality import detect_gaps, freshness, validate_navs, validate_ohlc
 
 
 def test_validate_ohlc_isolates_bad_rows():
@@ -19,7 +18,7 @@ def test_validate_ohlc_isolates_bad_rows():
 def test_validate_ohlc_negative_volume():
     df = make_bars(3)
     df.loc[0, "volume"] = -1
-    clean, bad = validate_ohlc(df)
+    _, bad = validate_ohlc(df)
     assert len(bad) == 1
 
 

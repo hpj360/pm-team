@@ -73,7 +73,7 @@ def fetch(
             try:
                 cal = load_calendar()
                 itd = lambda d: d in set(cal)
-            except Exception:
+            except Exception:  # noqa: BLE001 日历源失败（无 akshare/网络）退化为内置交易日近似
                 itd = None
             result["backfilled"] = source.backfill(store, inst.id, inst.raw,
                                                    date.today(), is_trading_day=itd)
@@ -182,7 +182,7 @@ def dq_report(
         try:
             cal = load_calendar()
             itd = lambda d: d in set(cal)
-        except Exception:
+        except Exception:  # noqa: BLE001 日历源失败（无 akshare/网络）退化为内置交易日近似
             itd = None
 
         instruments = store.conn.execute("SELECT id, market, symbol FROM instruments").fetchall()
@@ -224,7 +224,7 @@ def dq_report(
                     raw = sym
                 try:
                     remote_price = fetchers[market](raw)
-                except Exception as exc:
+                except Exception as exc:  # noqa: BLE001 单标的拉取失败记录后继续，不中断整份报告
                     cross_results.append({"instrument": iid, "error": f"{type(exc).__name__}: {exc}"})
                     continue
                 result = cross_check(local_price, remote_price)
@@ -334,6 +334,43 @@ def backtest(
         typer.echo(json.dumps({"instrument": inst.id, "strategy": strategy,
                                "baseline_buy_hold": baseline,
                                **result}, ensure_ascii=False, default=str))
+    finally:
+        store.close()
+
+
+# ---------- walkforward（P2 防过拟合） ----------
+@app.command("wf")
+def walkforward_cmd(
+    symbol: str,
+    market: str | None = None,
+    train_n: int = typer.Option(120, help="训练窗口（bar 数）"),
+    test_n: int = typer.Option(20, help="样本外窗口（bar 数，即滚动步长）"),
+):
+    """Walk-forward 滚动验证 sma_cross 参数（train 选参 / test 样本外评估）。"""
+    from .backtest.walkforward import walk_forward
+
+    inst = normalize(symbol, market)
+    store = _open_store()
+    try:
+        if inst.market == "fund":
+            bars = store.get_navs(inst.id)
+            if bars.empty:
+                typer.echo("无本地数据，请先 quant fetch")
+                raise typer.Exit(1)
+            bars = bars.rename(columns={"nav": "close"})
+            bars["open"] = bars["close"]
+            bars["high"] = bars["low"] = bars["close"]
+            bars["volume"] = 0.0
+        else:
+            bars = store.get_bars(inst.id)
+            if bars.empty:
+                typer.echo("无本地数据，请先 quant fetch")
+                raise typer.Exit(1)
+        clean, _ = validate_ohlc(bars)
+        res = walk_forward(clean, train_n=train_n, test_n=test_n)
+        out = {"instrument": inst.id, **res.as_dict()}
+        out["folds"] = res.folds[:10]  # 折明细截断，防刷屏
+        typer.echo(json.dumps(out, ensure_ascii=False))
     finally:
         store.close()
 

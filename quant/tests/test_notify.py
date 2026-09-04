@@ -1,6 +1,5 @@
 """notify: 多通道推送（AC-6）——mock 网络，断言 payload/分级/重试/隔离。"""
 
-import json
 
 import pytest
 
@@ -134,6 +133,6 @@ def test_feishu_signature(monkeypatch, tmp_path):
     import hashlib
     import hmac as hmac_mod
 
-    s = f"1700000000\nsec"
+    s = "1700000000\nsec"
     expect = base64.b64encode(hmac_mod.new(s.encode(), digestmod=hashlib.sha256).digest()).decode()
     assert body["sign"] == expect
