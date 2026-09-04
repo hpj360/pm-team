@@ -8,7 +8,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime, timedelta
 from pathlib import Path
 
@@ -48,6 +48,24 @@ class SignalRecord:
     id: int = 0
 
 
+def _normalize_rule_symbol(symbol: str | int, market: str) -> tuple[str, str]:
+    """规则 symbol 规范化（用户可写 000001 / 600519 / BTC-USDT）。
+
+    - YAML 会把裸数字代码解析成 int（000001 -> 1 丢前导零），
+      cn/fund 代码固定 6 位数字，按 06d 补齐还原。
+    - 规范失败但 market 已显式给出时按原样放行（用户可能已写 000001.OF 等规范形式）。
+    """
+    from ..data.universe import normalize
+
+    if isinstance(symbol, int):
+        symbol = f"{symbol:06d}"
+    try:
+        inst = normalize(str(symbol), market)
+        return inst.market, inst.symbol
+    except ValueError:
+        return market.strip().lower(), str(symbol).strip().upper()
+
+
 def load_rules(path: Path | str | None = None) -> list[SignalRule]:
     import yaml
 
@@ -58,6 +76,8 @@ def load_rules(path: Path | str | None = None) -> list[SignalRule]:
     rules = []
     for item in raw.get("rules", []):
         item.setdefault("id", f"{item['symbol']}-{item['metric']}-{item['op']}")
+        item["market"], item["symbol"] = _normalize_rule_symbol(
+            item["symbol"], item["market"])
         rules.append(SignalRule(**item))
     return rules
 
@@ -78,8 +98,15 @@ class SignalEngine:
             nav = navs.set_index("ts")["nav"]
             if rule.metric == "nav":
                 return nav
-            if rule.metric == "nav_drawdown":
+            if rule.metric in ("nav_drawdown", "drawdown"):  # drawdown 为易用别名
                 return nav / nav.cummax() - 1
+            # 与 cn/crypto 一致: 技术指标按净值序列计算（RSI/MA 等日频指标）
+            if rule.metric in ("ma20", "ma60", "rsi14"):
+                return compute_all(nav)[rule.metric]
+            if rule.metric == "macd_hist":
+                return compute_all(nav)["macd"]["hist"]
+            if rule.metric == "boll_pct_b":
+                return compute_all(nav)["boll"]["pct_b"]
             raise ValueError(f"基金规则不支持指标 {rule.metric}")
         bars = self.store.get_bars(iid)
         if bars.empty:

@@ -86,3 +86,28 @@ def test_no_data_records_dq_event(store):
     SignalEngine(store, [rule], now=datetime.now()).check()
     events = store.get_dq_events()
     assert len(events) == 1 and events.iloc[0]["kind"] == "signal_no_data"
+
+
+def test_load_rules_normalizes_symbol(tmp_path):
+    """用户写裸代码（000001/600519），load_rules 应规范化为 .OF/.SH 形式。"""
+    import yaml
+
+    from quant.signals.engine import load_rules
+
+    cfg = tmp_path / "signals.yaml"
+    cfg.write_text(yaml.safe_dump({"rules": [
+        {"id": "f1", "symbol": "000001", "market": "fund",
+         "metric": "nav_drawdown", "op": "<", "threshold": -0.15, "direction": "info"},
+        {"id": "c1", "symbol": "600519", "market": "cn",
+         "metric": "close", "op": ">", "threshold": 1000, "direction": "info"},
+        {"id": "x1", "symbol": "BTC-USDT", "market": "crypto",
+         "metric": "rsi14", "op": "<", "threshold": 30, "direction": "buy"},
+        {"id": "f2", "symbol": "000001.OF", "market": "fund",
+         "metric": "nav", "op": ">", "threshold": 0.5, "direction": "info"},
+    ]}))
+    rules = load_rules(cfg)
+    by_id = {r.id: r for r in rules}
+    assert by_id["f1"].symbol == "000001.OF"
+    assert by_id["c1"].symbol == "600519.SH"
+    assert by_id["x1"].symbol == "BTC-USDT"
+    assert by_id["f2"].symbol == "000001.OF"  # 已规范形式原样保留
