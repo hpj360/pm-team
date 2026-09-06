@@ -37,7 +37,7 @@ if positions:
         "盈亏(CNY)": round(p.pnl_cny, 2), "数据时点": p.data_as_of, "状态": p.data_status,
     } for p in view.positions]
     st.subheader(f"组合市值: {view.total_cny:,.2f} CNY")
-    st.dataframe(pd.DataFrame(rows), use_container_width=True)
+    st.dataframe(pd.DataFrame(rows), width='stretch')
 else:
     st.info("无持仓：编辑 quant/data/positions.csv 后刷新")
 
@@ -53,10 +53,10 @@ for iid, market, sym in instruments:
         gaps = len(detect_gaps(market, df, df["ts"].min().date(), df["ts"].max().date()))
     dq_rows.append({"标的": sym, "市场": market, "最后数据": str(last),
                     "新鲜度": status, "缺口数": gaps, "说明": desc})
-st.dataframe(pd.DataFrame(dq_rows), use_container_width=True)
+st.dataframe(pd.DataFrame(dq_rows), width='stretch')
 
 events = store.get_dq_events(limit=20)
 if not events.empty:
     with st.expander("近期数据质量事件"):
-        st.dataframe(events, use_container_width=True)
+        st.dataframe(events, width='stretch')
 store.close()

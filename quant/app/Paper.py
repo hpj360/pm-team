@@ -38,16 +38,16 @@ c7.metric("跳过", rep.skips)
 
 if rep.positions:
     st.subheader("当前持仓")
-    st.dataframe(pd.DataFrame(rep.positions), use_container_width=True)
+    st.dataframe(pd.DataFrame(rep.positions), width='stretch')
 
 orders = store.get_orders(account="paper", limit=200)
 if orders is not None and not orders.empty:
     with st.expander("成交流水（最近 200 笔）"):
-        st.dataframe(orders, use_container_width=True)
+        st.dataframe(orders, width='stretch')
 
 events = store.get_dq_events(limit=100)
 if not events.empty and (events["kind"].isin(["paper_skip"])).any():
     with st.expander("跳过记录"):
-        st.dataframe(events[events["kind"] == "paper_skip"], use_container_width=True)
+        st.dataframe(events[events["kind"] == "paper_skip"], width='stretch')
 
 store.close()

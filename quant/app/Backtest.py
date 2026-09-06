@@ -70,7 +70,7 @@ else:
                       if wf.overfit_ratio != float("inf") else "∞")
             if wf.overfit_ratio > 3 or wf.overfit_ratio == float("inf"):
                 st.warning("过拟合比 > 3: 参数在样本外不稳定，谨慎采信回测结果")
-            st.dataframe(pd.DataFrame(wf.folds), use_container_width=True)
+            st.dataframe(pd.DataFrame(wf.folds), width='stretch')
             st.caption("各折 train 段最优参数频次: " +
                        ", ".join(f"{k}×{v}" for k, v in wf.best_params_freq.items()))
         except ValueError as exc:

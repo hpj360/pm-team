@@ -38,7 +38,8 @@ include = ["quant*"]
 ignore = ["DTZ001", "DTZ005", "DTZ006", "DTZ011"]
 
 [tool.pytest.ini_options]
+addopts = "-m 'not network and not testnet'"
 markers = [
-    "network: 需要真实网络的契约测试（默认跳过）",
+    "network: 需要真实网络的契约测试（默认跳过，pytest -m network 显式运行）",
     "testnet: 需要交易所 testnet API Key 的闭环测试（默认跳过）",
 ]
