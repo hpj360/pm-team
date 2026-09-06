@@ -13,5 +13,5 @@
 35 17 * * 1-5 cd /path/to/quant && quant trade paper
 35 * * * *    cd /path/to/quant && quant trade paper
 
-# 数据质量例行报告: 每周日晚
-0 20 * * 0    cd /path/to/quant && quant dq
+# 数据质量例行报告: 每周日晚（--push 推送摘要: 缺口/STALE/偏差清单）
+0 20 * * 0    cd /path/to/quant && quant dq --push

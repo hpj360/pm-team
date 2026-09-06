@@ -169,10 +169,35 @@ def signals_cmd(
 
 
 # ---------- dq ----------
+def _dq_summary(out: dict) -> str:
+    """dq 报告的可读摘要（缺口/STALE/偏差异常清单，供 notify 推送）。"""
+    lines: list[str] = []
+    stale = [r for r in out.get("freshness", []) if r["status"] == "STALE"]
+    lines.append(f"STALE 标的 {len(stale)} 个"
+                 + (": " + ", ".join(r["instrument"] for r in stale) if stale else ""))
+    gapped = [r for r in out.get("freshness", []) if r.get("gaps")]
+    lines.append(f"存在缺口标的 {len(gapped)} 个"
+                 + (": " + ", ".join(f"{r['instrument']}({r['gaps']})" for r in gapped)
+                    if gapped else ""))
+    deviated: list[dict] = []
+    if "cross_check" in out:
+        deviated = [r for r in out["cross_check"] if r.get("deviated")]
+        lines.append(f"交叉验证偏差 {len(deviated)} 个"
+                     + (": " + ", ".join(
+                         f"{r['instrument']} {r['deviation']:.4f}" for r in deviated)
+                        if deviated else ""))
+    n_events = len(out.get("recent_dq_events", []))
+    lines.append(f"近期 dq 事件 {n_events} 条")
+    if not stale and not gapped and not deviated:
+        lines.append("全部正常")
+    return "\n".join(lines)
+
+
 @app.command("dq")
 def dq_report(
     symbol: str | None = typer.Option(None, help="只查单个标的（如 600519）"),
     cross: bool = typer.Option(False, "--cross", help="最新价双源交叉验证（需网络）"),
+    push: bool = typer.Option(False, "--push", help="推送摘要到通知渠道（缺口/STALE/偏差清单）"),
 ):
     """数据质量报告：新鲜度 + 完整性缺口 + 近期 dq 事件 (+ 可选交叉验证)。"""
     store = _open_store(read_only=False)
@@ -241,6 +266,8 @@ def dq_report(
         if cross:
             out["cross_check"] = cross_results
         typer.echo(json.dumps(out, ensure_ascii=False, default=str))
+        if push:
+            Notifier().send("数据质量周报", _dq_summary(out), level="regular")
     finally:
         store.close()
 
@@ -386,7 +413,11 @@ def report_cmd(
 
     store = _open_store()
     try:
-        rep = build_paper_report(store, init_cash=init_cash)
+        try:
+            rep = build_paper_report(store, init_cash=init_cash)
+        except ValueError as exc:  # 无成交记录：友好提示而非裸 traceback
+            typer.echo(str(exc))
+            raise typer.Exit(1)
         typer.echo(rep.render())
         typer.echo(json.dumps(rep.as_dict(), ensure_ascii=False, default=str))
         if push:

@@ -22,14 +22,28 @@ class Position:
     opened_at: str = ""
 
 
+def _normalize_symbol(market: str, symbol: str) -> tuple[str, str]:
+    """持仓 symbol/market 规范化（用户可写 600519 裸代码，与信号规则一致）。"""
+    from ..data.universe import normalize
+
+    try:
+        inst = normalize(symbol, market)
+        return inst.market, inst.symbol
+    except ValueError:
+        return market.strip().lower(), symbol.strip().upper()
+
+
 def load_positions(path: Path | None = None) -> list[Position]:
     path = Path(path) if path else POSITIONS_PATH
     if not path.exists():
         return []
     df = pd.read_csv(path)
-    return [Position(str(r["market"]), str(r["symbol"]), float(r["quantity"]),
-                     float(r["avg_cost"]), str(r.get("opened_at", "")))
-            for _, r in df.iterrows()]
+    out = []
+    for _, r in df.iterrows():
+        market, symbol = _normalize_symbol(str(r["market"]), str(r["symbol"]))
+        out.append(Position(market, symbol, float(r["quantity"]),
+                            float(r["avg_cost"]), str(r.get("opened_at", ""))))
+    return out
 
 
 def save_positions(positions: list[Position], path: Path | None = None) -> None:
